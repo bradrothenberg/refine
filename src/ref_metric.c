@@ -1335,6 +1335,8 @@ REF_FCN REF_STATUS ref_metric_from_curvature(REF_DBL *metric,
     RSS(ref_egads_diagonal(ref_geom, REF_EMPTY, &hmax), "egads bbox diag");
   } else if (ref_geom_meshlinked(ref_geom)) {
     RSS(ref_node_bounding_box_diagonal(ref_node, &hmax), "bbox diag");
+  } else if (ref_geom_ntop_loaded(ref_geom)) {
+    RSS(ref_node_bounding_box_diagonal(ref_node, &hmax), "bbox diag");
   } else {
     printf("\nNo geometry model, did you forget to load it?\n\n");
     RSS(REF_IMPLEMENT, "...or implement non-CAD curvature estimate");

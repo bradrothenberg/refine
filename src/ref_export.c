@@ -1944,7 +1944,7 @@ REF_FCN static REF_STATUS ref_export_meshb(REF_GRID ref_grid,
   if (3 < version) int_size = 8;
   header_size = 4 + fp_size + int_size;
 
-  file = fopen(filename, "w");
+  file = fopen(filename, "wb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 

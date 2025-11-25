@@ -1989,6 +1989,11 @@ REF_FCN REF_STATUS ref_smooth_post_edge_split(REF_GRID ref_grid, REF_INT node) {
   REF_NODE ref_node = ref_grid_node(ref_grid);
   REF_BOOL allowed, interior;
 
+  /* Skip tet smoothing for surface meshes (no tets exist) */
+  if (ref_grid_surf(ref_grid)) {
+    return REF_SUCCESS;
+  }
+
   RSS(ref_smooth_local_cell_about(ref_grid_tet(ref_grid), ref_node, node,
                                   &allowed),
       "para");

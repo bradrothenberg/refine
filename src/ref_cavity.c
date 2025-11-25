@@ -24,6 +24,7 @@
 
 #include "ref_adapt.h"
 #include "ref_dict.h"
+#include "ref_geom.h"
 #include "ref_edge.h"
 #include "ref_export.h"
 #include "ref_list.h"
@@ -2813,6 +2814,11 @@ REF_FCN static REF_STATUS ref_cavity_surf_geom_face_pass(REF_GRID ref_grid) {
 }
 
 REF_FCN REF_STATUS ref_cavity_pass(REF_GRID ref_grid) {
+  /* Skip surface geometry cavity passes for nTop implicit surfaces */
+  /* These passes require EGADS edge/face functionality not available for nTop */
+  if (ref_geom_ntop_loaded(ref_grid_geom(ref_grid))) {
+    return REF_SUCCESS;
+  }
   RSS(ref_cavity_swap_tet_pass(ref_grid), "cavity swap pass");
   RSS(ref_cavity_surf_geom_edge_pass(ref_grid), "cavity geom edge");
   RSS(ref_cavity_surf_geom_face_pass(ref_grid), "cavity geom edge");

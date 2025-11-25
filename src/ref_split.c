@@ -244,7 +244,8 @@ REF_FCN REF_STATUS ref_split_pass(REF_GRID ref_grid) {
     try_cavity = REF_FALSE;
     if (!allowed_tet_quality || !allowed_ratio || !allowed_tri_conformity ||
         !allowed_tri_quality) {
-      if (geom_support) {
+      /* Skip cavity operations for nTop - cavity requires EGADS edge geometry */
+      if (geom_support && !ref_geom_ntop_loaded(ref_grid_geom(ref_grid))) {
         try_cavity = REF_TRUE;
       } else {
         RSS(ref_node_remove(ref_node, new_node), "remove new node");
@@ -291,7 +292,9 @@ REF_FCN REF_STATUS ref_split_pass(REF_GRID ref_grid) {
 
         if (valid_cavity) {
           if (transcript) printf("cavity replace\n");
+          printf("DEBUG split: before cavity_replace tri=%ld\n", (long)ref_cell_n(ref_grid_tri(ref_grid)));
           RSS(ref_cavity_replace(ref_cavity), "cav replace");
+          printf("DEBUG split: after cavity_replace tri=%ld\n", (long)ref_cell_n(ref_grid_tri(ref_grid)));
           RSS(ref_cavity_free(ref_cavity), "cav free");
           ref_cavity = (REF_CAVITY)NULL;
           ref_node_age(ref_node, node0) = 0;

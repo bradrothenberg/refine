@@ -226,6 +226,10 @@ REF_FCN static REF_STATUS ref_adapt_parameter(REF_GRID ref_grid,
   det = max_det;
   RSS(ref_mpi_max(ref_mpi, &det, &max_det, REF_DBL_TYPE), "mpi max");
   RSS(ref_mpi_bcast(ref_mpi, &max_det, 1, REF_DBL_TYPE), "bcast");
+  if (max_det <= 0.0) {
+    if (ref_mpi_once(ref_mpi)) printf("WARNING: max_det=%e <= 0, using fallback\n", max_det);
+    max_det = 1.0e-30;
+  }
   RAS(ref_math_divisible(1.0, sqrt(max_det)), "can not invert sqrt(max_det)");
   min_metric_vol = 1.0 / sqrt(max_det);
 

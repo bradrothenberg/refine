@@ -106,7 +106,7 @@ REF_FCN static REF_STATUS ref_import_tri(REF_GRID *ref_grid_ptr,
   ref_grid = (*ref_grid_ptr);
   ref_node = ref_grid_node(ref_grid);
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -166,7 +166,7 @@ REF_FCN static REF_STATUS ref_import_fgrid(REF_GRID *ref_grid_ptr,
   ref_grid = (*ref_grid_ptr);
   ref_node = ref_grid_node(ref_grid);
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -242,7 +242,7 @@ REF_FCN static REF_STATUS ref_import_ugrid(REF_GRID *ref_grid_ptr,
   ref_grid = (*ref_grid_ptr);
   ref_node = ref_grid_node(ref_grid);
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -397,7 +397,7 @@ REF_FCN static REF_STATUS ref_import_surf(REF_GRID *ref_grid_ptr,
   ref_grid = (*ref_grid_ptr);
   ref_node = ref_grid_node(ref_grid);
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -558,7 +558,7 @@ REF_FCN static REF_STATUS ref_import_bin_ugrid(REF_GRID *ref_grid_ptr,
   ref_grid = (*ref_grid_ptr);
   ref_node = ref_grid_node(ref_grid);
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -647,7 +647,7 @@ REF_FCN static REF_STATUS ref_import_r8_ugrid(REF_GRID *ref_grid_ptr,
   ref_grid = (*ref_grid_ptr);
   ref_node = ref_grid_node(ref_grid);
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -814,7 +814,7 @@ REF_FCN static REF_STATUS ref_import_su2(REF_GRID *ref_grid_ptr,
   ref_grid = (*ref_grid_ptr);
   ref_node = ref_grid_node(ref_grid);
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -993,7 +993,7 @@ REF_FCN static REF_STATUS ref_import_msh(REF_GRID *ref_grid_ptr,
   ref_grid = (*ref_grid_ptr);
   ref_node = ref_grid_node(ref_grid);
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -1228,7 +1228,7 @@ REF_FCN static REF_STATUS ref_import_tetgen_node(REF_GRID *ref_grid_ptr,
   ref_grid = (*ref_grid_ptr);
   ref_node = ref_grid_node(ref_grid);
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -1303,7 +1303,7 @@ REF_FCN static REF_STATUS ref_import_i_like_cfd_grid(REF_GRID *ref_grid_ptr,
 
   ref_grid_twod(ref_grid) = REF_TRUE;
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -1410,7 +1410,7 @@ REF_FCN REF_STATUS ref_import_meshb_header(const char *filename,
        keyword_code++)
     key_pos[keyword_code] = REF_EMPTY;
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -1561,7 +1561,7 @@ REF_FCN static REF_STATUS ref_import_meshb(REF_GRID *ref_grid_ptr,
   ref_geom = ref_grid_geom(ref_grid);
 
   if (verbose) printf("open %s\n", filename);
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 
@@ -1772,7 +1772,7 @@ REF_FCN REF_STATUS ref_import_examine_header(const char *filename) {
   int i;
   REF_BOOL file_position_report = REF_FALSE;
 
-  file = fopen(filename, "r");
+  file = fopen(filename, "rb");
   if (NULL == (void *)file) printf("unable to open %s\n", filename);
   RNS(file, "unable to open file");
 

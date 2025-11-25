@@ -1726,8 +1726,13 @@ REF_FCN REF_STATUS ref_geom_face_rsn(REF_GEOM ref_geom, REF_INT faceid,
   REF_DBL xyz[3];
   REF_DBL dxyz_dtuv[15];
   REF_DBL drsduv[4];
-  RSS(ref_egads_eval_at(ref_geom, REF_GEOM_FACE, faceid, uv, xyz, dxyz_dtuv),
-      "eval");
+  if (ref_geom_ntop_loaded(ref_geom)) {
+    RSS(ref_ntop_eval_at(ref_geom, REF_GEOM_FACE, faceid, uv, xyz, dxyz_dtuv),
+        "ntop eval");
+  } else {
+    RSS(ref_egads_eval_at(ref_geom, REF_GEOM_FACE, faceid, uv, xyz, dxyz_dtuv),
+        "eval");
+  }
   RAISE(ref_geom_uv_rsn(dxyz_dtuv, r, s, n, drsduv));
   return REF_SUCCESS;
 }

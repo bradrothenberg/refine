@@ -693,6 +693,16 @@ static REF_STATUS adapt(REF_MPI ref_mpi_orig, int argc, char *argv[]) {
         printf("load nTop implicit from %s\n", in_implicit);
       RSS(ref_ntop_load(ref_grid_geom(ref_grid), in_implicit), "load implicit");
       ref_mpi_stopwatch_stop(ref_mpi, "load implicit");
+      /* Associate all surface nodes with the implicit for curvature metrics */
+      RSS(ref_ntop_constrain_all(ref_grid), "constrain to implicit");
+      ref_mpi_stopwatch_stop(ref_mpi, "constrain nodes");
+      {
+        REF_INT ntet;
+        /* Set surface mode if no tets */
+        RSS(ref_cell_ncell(ref_grid_tet(ref_grid), ref_grid_node(ref_grid), &ntet),
+            "count tets");
+        if (0 == ntet) ref_grid_surf(ref_grid) = REF_TRUE;
+      }
     } else {
       RXS(ref_args_char(argc, argv, "--egads", "-g", &in_egads), REF_NOT_FOUND,
           "egads arg search");
@@ -3315,6 +3325,16 @@ static REF_STATUS loop(REF_MPI ref_mpi_orig, int argc, char *argv[]) {
         printf("load nTop implicit from %s\n", in_implicit);
       RSS(ref_ntop_load(ref_grid_geom(ref_grid), in_implicit), "load implicit");
       ref_mpi_stopwatch_stop(ref_mpi, "load implicit");
+      /* Associate all surface nodes with the implicit for curvature metrics */
+      RSS(ref_ntop_constrain_all(ref_grid), "constrain to implicit");
+      ref_mpi_stopwatch_stop(ref_mpi, "constrain nodes");
+      {
+        REF_INT ntet;
+        /* Set surface mode if no tets */
+        RSS(ref_cell_ncell(ref_grid_tet(ref_grid), ref_grid_node(ref_grid), &ntet),
+            "count tets");
+        if (0 == ntet) ref_grid_surf(ref_grid) = REF_TRUE;
+      }
     } else {
       RXS(ref_args_char(argc, argv, "--egads", "-g", &in_egads), REF_NOT_FOUND,
           "egads arg search");

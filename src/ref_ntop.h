@@ -27,6 +27,7 @@ BEGIN_C_DECLORATION
 END_C_DECLORATION
 
 #include "ref_geom.h"
+#include "ref_grid.h"
 
 BEGIN_C_DECLORATION
 
@@ -96,6 +97,9 @@ REF_FCN REF_STATUS ref_ntop_gap(REF_GEOM ref_geom, REF_INT node, REF_DBL *gap);
 /* Get diagonal of bounding box */
 REF_FCN REF_STATUS ref_ntop_diagonal(REF_GEOM ref_geom, REF_INT geom,
                                      REF_DBL *diag);
+
+/* Associate all surface nodes with the implicit face (for curvature metrics) */
+REF_FCN REF_STATUS ref_ntop_constrain_all(REF_GRID ref_grid);
 
 END_C_DECLORATION
 

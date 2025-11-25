@@ -470,24 +470,24 @@ REF_FCN REF_STATUS ref_ntop_invert(REF_GEOM ref_geom, REF_INT type,
 
 static REF_STATUS ref_ntop_compute_normal(REF_NTOP_CONTEXT ntop_context,
                                           REF_DBL *xyz, REF_DBL *normal) {
-  /* Compute gradient of field (approximate normal) */
-  REF_DBL eps = 1.0e-7;
-  REF_DBL f0 =
-      ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1], xyz[2]);
-  REF_DBL fx = ref_ntop_query_field_impl(ntop_context, xyz[0] + eps, xyz[1],
-                                          xyz[2]);
-  REF_DBL fy = ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1] + eps,
-                                          xyz[2]);
-  REF_DBL fz = ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1],
-                                          xyz[2] + eps);
+#ifdef HAVE_NTOP
+  /* Use ntop_core_query_derivative for exact gradient (= surface normal) */
+  ntop_core_vec3 pt;
+  ntop_core_derivative deriv;
+  REF_DBL grad[3], mag;
 
-  REF_DBL grad[3];
-  grad[0] = (fx - f0) / eps;
-  grad[1] = (fy - f0) / eps;
-  grad[2] = (fz - f0) / eps;
+  pt.x = xyz[0] * ntop_context->unit_scale;
+  pt.y = xyz[1] * ntop_context->unit_scale;
+  pt.z = xyz[2] * ntop_context->unit_scale;
+
+  ntop_core_query_derivative(ntop_context->implicit_handle, pt, &deriv);
+
+  grad[0] = deriv.dx;
+  grad[1] = deriv.dy;
+  grad[2] = deriv.dz;
 
   /* Normalize */
-  REF_DBL mag = sqrt(grad[0] * grad[0] + grad[1] * grad[1] + grad[2] * grad[2]);
+  mag = sqrt(grad[0] * grad[0] + grad[1] * grad[1] + grad[2] * grad[2]);
 
   if (mag < 1.0e-14) {
     /* Degenerate - return arbitrary normal */
@@ -499,6 +499,35 @@ static REF_STATUS ref_ntop_compute_normal(REF_NTOP_CONTEXT ntop_context,
     normal[1] = grad[1] / mag;
     normal[2] = grad[2] / mag;
   }
+#else
+  /* Fallback: finite difference for stub implementation */
+  REF_DBL eps = 1.0e-7;
+  REF_DBL f0, fx, fy, fz;
+  REF_DBL grad[3], mag;
+  
+  f0 = ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1], xyz[2]);
+  fx = ref_ntop_query_field_impl(ntop_context, xyz[0] + eps, xyz[1], xyz[2]);
+  fy = ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1] + eps, xyz[2]);
+  fz = ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1], xyz[2] + eps);
+
+  grad[0] = (fx - f0) / eps;
+  grad[1] = (fy - f0) / eps;
+  grad[2] = (fz - f0) / eps;
+
+  /* Normalize */
+  mag = sqrt(grad[0] * grad[0] + grad[1] * grad[1] + grad[2] * grad[2]);
+
+  if (mag < 1.0e-14) {
+    /* Degenerate - return arbitrary normal */
+    normal[0] = 0.0;
+    normal[1] = 0.0;
+    normal[2] = 1.0;
+  } else {
+    normal[0] = grad[0] / mag;
+    normal[1] = grad[1] / mag;
+    normal[2] = grad[2] / mag;
+  }
+#endif
 
   return REF_SUCCESS;
 }
@@ -728,6 +757,53 @@ REF_FCN REF_STATUS ref_ntop_diagonal(REF_GEOM ref_geom, REF_INT geom,
   *diag = sqrt(pow(ntop_context->bbox_max[0] - ntop_context->bbox_min[0], 2) +
                pow(ntop_context->bbox_max[1] - ntop_context->bbox_min[1], 2) +
                pow(ntop_context->bbox_max[2] - ntop_context->bbox_min[2], 2));
+
+  return REF_SUCCESS;
+}
+
+/* ========================================================================
+ * CONSTRAIN ALL SURFACE NODES TO IMPLICIT
+ * ======================================================================== */
+
+REF_FCN REF_STATUS ref_ntop_constrain_all(REF_GRID ref_grid) {
+  REF_NODE ref_node = ref_grid_node(ref_grid);
+  REF_GEOM ref_geom = ref_grid_geom(ref_grid);
+  REF_CELL ref_cell = ref_grid_tri(ref_grid);
+  REF_INT node, cell, cell_node, nodes[REF_CELL_MAX_SIZE_PER];
+  REF_DBL xyz[3], param[2];
+  REF_INT face_id = 1; /* Single implicit face */
+  REF_INT n_constrained = 0;
+
+  RNS(ref_geom, "null geom");
+  RNS(ref_geom->context, "null context");
+
+  /* Iterate over all triangles and constrain their nodes */
+  each_ref_cell_valid_cell_with_nodes(ref_cell, cell, nodes) {
+    each_ref_cell_cell_node(ref_cell, cell_node) {
+      REF_BOOL has_face;
+      node = nodes[cell_node];
+
+      /* Skip if already has face geom */
+      RSS(ref_geom_is_a(ref_geom, node, REF_GEOM_FACE, &has_face), "face check");
+      if (has_face) continue;
+
+      /* Get node position */
+      xyz[0] = ref_node_xyz(ref_node, 0, node);
+      xyz[1] = ref_node_xyz(ref_node, 1, node);
+      xyz[2] = ref_node_xyz(ref_node, 2, node);
+
+      /* Project to get UV parameters */
+      RSS(ref_ntop_inverse_eval(ref_geom, REF_GEOM_FACE, face_id, xyz, param),
+          "inverse eval");
+
+      /* Add face geometry association */
+      RSS(ref_geom_add(ref_geom, node, REF_GEOM_FACE, face_id, param),
+          "add face geom");
+      n_constrained++;
+    }
+  }
+
+  printf("Constrained %d nodes to implicit face\n", n_constrained);
 
   return REF_SUCCESS;
 }

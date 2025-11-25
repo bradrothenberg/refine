@@ -30,6 +30,8 @@
 #include "ref_math.h"
 #include "ref_matrix.h"
 #include "ref_phys.h"
+#include "ref_geom.h"
+#include "ref_ntop.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -3567,6 +3569,10 @@ REF_FCN REF_STATUS ref_egads_eval(REF_GEOM ref_geom, REF_INT geom, REF_DBL *xyz,
 REF_FCN REF_STATUS ref_egads_eval_at(REF_GEOM ref_geom, REF_INT type,
                                      REF_INT id, REF_DBL *params, REF_DBL *xyz,
                                      REF_DBL *dxyz_dtuv) {
+  /* Dispatch to nTop if implicit surface is loaded */
+  if (ref_geom_ntop_loaded(ref_geom)) {
+    return ref_ntop_eval_at(ref_geom, type, id, params, xyz, dxyz_dtuv);
+  }
 #ifdef HAVE_EGADS
   double eval[18];
   REF_INT i;
