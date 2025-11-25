@@ -1,0 +1,10 @@
+^C:\CPLUSPLUS\NTOP\REFINE\BUILD\CMAKEFILES\41748EB7BF502DF40DF90EF095190F5E\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/cplusplus/ntop/refine -BC:/cplusplus/ntop/refine/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/cplusplus/ntop/refine/build/refine.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

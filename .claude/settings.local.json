@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed:*)",
+      "Bash(cat:*)",
+      "Bash(if [ -d build ])",
+      "Bash(then echo \"Build directory exists\")",
+      "Bash(else echo \"No build directory found\")",
+      "Bash(fi)",
+      "Bash(gcc:*)",
+      "Bash(cmd.exe /c \"choco install cmake --installargs ''''ADD_CMAKE_TO_PATH=System'''' -y\")",
+      "Bash(cmd.exe /c \"where cl.exe\")",
+      "Bash(cmd.exe /c \"dir /s /b \"\"C:\\Program Files\\Microsoft Visual Studio\\*\\*\\VC\\Tools\\MSVC\\*\\bin\\*\\cl.exe\"\"\")",
+      "Bash(cmd.exe:*)",
+      "Bash(powershell.exe -Command \"choco install cmake -y\")",
+      "Bash(powershell.exe -Command \"Get-Command cmake | Select-Object -ExpandProperty Source\")",
+      "Bash(\"/c/Program Files/CMake/bin/cmake.exe\" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ..)",
+      "Bash(powershell.exe -Command \"Start-Process -FilePath ''choco'' -ArgumentList ''install visualstudio2022buildtools -y'' -Verb RunAs -Wait\")",
+      "Bash(powershell.exe -Command \"choco install mingw -y\")",
+      "Bash(\"/c/Program Files/CMake/bin/cmake.exe\" -G \"Visual Studio 17 2022\" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ..)",
+      "Bash(\"/c/Program Files/CMake/bin/cmake.exe\" --build . --config Release)",
+      "Bash(\"/c/Program Files/CMake/bin/cmake.exe\" --build .)",
+      "Bash(\"c:\\cplusplus\\ntop\\refine\\build\\src\\Debug\\ref.exe\" --help)",
+      "Bash(\"c:\\cplusplus\\ntop\\refine\\build\\src\\Debug\\ref.exe\" adapt -h)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(ls -la \"c:\\cplusplus\\ntop\\refine\\nTop\\docs\\examples\\cpp\"\" 2>/dev/null || ls -la \"c:cplusplusntoprefinenTopdocsexamples\"\")",
+      "Bash(c:/cplusplus/ntop/refine/build/src/Debug/ref.exe:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

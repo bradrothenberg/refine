@@ -1,0 +1,10 @@
+^C:\CPLUSPLUS\NTOP\REFINE\SRC\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/cplusplus/ntop/refine -BC:/cplusplus/ntop/refine/build --check-stamp-file C:/cplusplus/ntop/refine/build/src/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

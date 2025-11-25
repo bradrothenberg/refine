@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/cplusplus/ntop/refine/build/cmake_install.cmake",
+		"C:/cplusplus/ntop/refine/build/src/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
