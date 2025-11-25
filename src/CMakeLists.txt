@@ -167,6 +167,26 @@ if (NOT MSVC)
     endif ()
 endif ()
 
+# nTop Core integration (optional)
+# Note: We declare the C API directly in ref_ntop.c since ntop_core.h is C++
+set(NTOP_CORE_DIR "" CACHE PATH "Path to nTop Core SDK directory (containing lib/)")
+if (NTOP_CORE_DIR)
+    message(STATUS "nTop Core SDK: ${NTOP_CORE_DIR}")
+    if (WIN32)
+        set(NTOP_CORE_LIB "${NTOP_CORE_DIR}/lib/ntop_core.lib")
+        set(NTOP_CORE_DLL "${NTOP_CORE_DIR}/lib/ntop_core.dll")
+    else()
+        set(NTOP_CORE_LIB "${NTOP_CORE_DIR}/lib/libntop_core.so")
+    endif()
+    if (EXISTS "${NTOP_CORE_LIB}")
+        list(APPEND EXTRA_DEFINITIONS HAVE_NTOP)
+        list(APPEND THIRD_PARTY_LIBRARIES "${NTOP_CORE_LIB}")
+        message(STATUS "nTop Core library: ${NTOP_CORE_LIB}")
+    else()
+        message(WARNING "nTop Core library not found at ${NTOP_CORE_LIB}")
+    endif()
+endif ()
+
 set(REF_MPI_SRC
         ref_mpi.c
         ref_migrate.c

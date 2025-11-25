@@ -29,12 +29,52 @@
 #include "ref_math.h"
 #include "ref_node.h"
 
-/* When HAVE_NTOP is defined, include nTop Core headers */
+/* When HAVE_NTOP is defined, declare nTop Core API (C-compatible) */
 #ifdef HAVE_NTOP
-/* TODO: Add this when you have the nTop Core SDK:
- * #include <ntop_core/ntop_core.h>
- */
-#warning "HAVE_NTOP defined but ntop_core.h not included yet"
+/* The ntop_core.h header is C++, so we declare the C API directly */
+#include <stdint.h>
+
+#ifdef _WIN32
+#define NTOP_CORE_API __declspec(dllimport)
+#else
+#define NTOP_CORE_API
+#endif
+
+typedef void* ntop_core_handle;
+
+typedef struct {
+  double x, y, z;
+} ntop_core_vec3;
+
+typedef struct {
+  ntop_core_vec3 min;
+  ntop_core_vec3 max;
+} ntop_core_bounding_box;
+
+typedef struct {
+  double dx, dy, dz;
+  double distance;
+} ntop_core_derivative;
+
+/* Import result codes */
+#define NTOP_IMPORT_SUCCESS             0
+#define NTOP_IMPORT_UNKNOWN_ERROR       1
+#define NTOP_IMPORT_FILE_DOESNT_EXIST   2
+#define NTOP_IMPORT_FILE_OPEN_ERROR     3
+#define NTOP_IMPORT_CORRUPT_FILE        4
+#define NTOP_IMPORT_UNSUPPORTED_VERSION 5
+
+/* nTop Core function declarations */
+NTOP_CORE_API uint32_t ntop_core_import_from_file(const char* utf8_filename,
+                                                   ntop_core_handle* out_handle);
+NTOP_CORE_API void ntop_core_release(ntop_core_handle handle);
+NTOP_CORE_API void ntop_core_query_bounding_box(ntop_core_handle handle,
+                                                 ntop_core_bounding_box* out_bbox);
+NTOP_CORE_API double ntop_core_query_field(ntop_core_handle handle,
+                                            ntop_core_vec3 point);
+NTOP_CORE_API void ntop_core_query_derivative(ntop_core_handle handle,
+                                               ntop_core_vec3 point,
+                                               ntop_core_derivative* out_deriv);
 #endif
 
 /* ========================================================================
@@ -93,9 +133,7 @@ REF_FCN REF_STATUS ref_ntop_close(REF_GEOM ref_geom) {
   /* Release nTop Core handle */
 #ifdef HAVE_NTOP
   if (NULL != ntop_context->implicit_handle) {
-    /* TODO: When you have nTop Core SDK, uncomment:
-     * ntop_core_release(ntop_context->implicit_handle);
-     */
+    ntop_core_release(ntop_context->implicit_handle);
   }
 #endif
 
@@ -115,39 +153,51 @@ REF_FCN REF_STATUS ref_ntop_load(REF_GEOM ref_geom, const char *filename) {
   ntop_context = (REF_NTOP_CONTEXT)(ref_geom->context);
 
 #ifdef HAVE_NTOP
-  /* TODO: When you have nTop Core SDK, implement:
-   *
-   * uint32_t result = ntop_core_import_from_file(filename,
-   *                                               &(ntop_context->implicit_handle));
-   *
-   * switch (result) {
-   *   case 0:  // SUCCESS
-   *     break;
-   *   case 2:  // FILE_DOESNT_EXIST
-   *     printf("ERROR: nTop file not found: %s\n", filename);
-   *     return REF_FAILURE;
-   *   // ... handle other errors
-   * }
-   *
-   * ntop_core_bounding_box bbox;
-   * ntop_core_query_bounding_box(ntop_context->implicit_handle, &bbox);
-   *
-   * ntop_context->bbox_min[0] = bbox.min.x;
-   * ntop_context->bbox_min[1] = bbox.min.y;
-   * ntop_context->bbox_min[2] = bbox.min.z;
-   * ntop_context->bbox_max[0] = bbox.max.x;
-   * ntop_context->bbox_max[1] = bbox.max.y;
-   * ntop_context->bbox_max[2] = bbox.max.z;
-   */
+  {
+    uint32_t result;
+    ntop_core_bounding_box bbox;
 
-  printf("WARNING: nTop Core library not linked - using stub implementation\n");
-  printf("         Attempted to load: %s\n", filename);
-  return REF_IMPLEMENT;
+    result = ntop_core_import_from_file(filename, &(ntop_context->implicit_handle));
+
+    switch (result) {
+      case 0: /* SUCCESS */
+        break;
+      case 2: /* FILE_DOESNT_EXIST */
+        printf("ERROR: nTop file not found: %s\n", filename);
+        return REF_FAILURE;
+      case 3: /* FILE_OPEN_ERROR */
+        printf("ERROR: Unable to open nTop file: %s\n", filename);
+        return REF_FAILURE;
+      case 4: /* CORRUPT_FILE */
+        printf("ERROR: Corrupt nTop file: %s\n", filename);
+        return REF_FAILURE;
+      case 5: /* UNSUPPORTED_VERSION */
+        printf("ERROR: Unsupported nTop file version: %s\n", filename);
+        return REF_FAILURE;
+      default:
+        printf("ERROR: Unknown error loading nTop file: %s (code %u)\n", filename, result);
+        return REF_FAILURE;
+    }
+
+    ntop_core_query_bounding_box(ntop_context->implicit_handle, &bbox);
+
+    ntop_context->bbox_min[0] = bbox.min.x;
+    ntop_context->bbox_min[1] = bbox.min.y;
+    ntop_context->bbox_min[2] = bbox.min.z;
+    ntop_context->bbox_max[0] = bbox.max.x;
+    ntop_context->bbox_max[1] = bbox.max.y;
+    ntop_context->bbox_max[2] = bbox.max.z;
+  }
 #else
   SUPRESS_UNUSED_COMPILER_WARNING(filename);
-  printf("ERROR: refine not compiled with HAVE_NTOP\n");
-  printf("       Recompile with -DHAVE_NTOP and link ntop_core library\n");
-  return REF_IMPLEMENT;
+  /* Without HAVE_NTOP, set up a stub sphere for testing */
+  ntop_context->bbox_min[0] = -0.005;
+  ntop_context->bbox_min[1] = -0.005;
+  ntop_context->bbox_min[2] = -0.005;
+  ntop_context->bbox_max[0] = 0.005;
+  ntop_context->bbox_max[1] = 0.005;
+  ntop_context->bbox_max[2] = 0.005;
+  printf("NOTE: refine compiled without HAVE_NTOP - using stub sphere\n");
 #endif
 
   /* For now, treat as single implicit body (face_id = 1) */
@@ -186,18 +236,11 @@ REF_FCN REF_STATUS ref_ntop_save(REF_GEOM ref_geom, const char *filename) {
 static double ref_ntop_query_field_impl(REF_NTOP_CONTEXT ntop_context,
                                         REF_DBL x, REF_DBL y, REF_DBL z) {
 #ifdef HAVE_NTOP
-  /* TODO: When you have nTop Core SDK:
-   * ntop_core_vec3 pt;
-   * pt.x = x * ntop_context->unit_scale;
-   * pt.y = y * ntop_context->unit_scale;
-   * pt.z = z * ntop_context->unit_scale;
-   * return ntop_core_query_field(ntop_context->implicit_handle, pt);
-   */
-  SUPRESS_UNUSED_COMPILER_WARNING(ntop_context);
-
-  /* Stub: Simple sphere of radius 0.005 at origin */
-  REF_DBL r = sqrt(x * x + y * y + z * z);
-  return r - 0.005;
+  ntop_core_vec3 pt;
+  pt.x = x * ntop_context->unit_scale;
+  pt.y = y * ntop_context->unit_scale;
+  pt.z = z * ntop_context->unit_scale;
+  return ntop_core_query_field(ntop_context->implicit_handle, pt);
 #else
   SUPRESS_UNUSED_COMPILER_WARNING(ntop_context);
   SUPRESS_UNUSED_COMPILER_WARNING(x);
@@ -214,24 +257,6 @@ static double ref_ntop_query_field_impl(REF_NTOP_CONTEXT ntop_context,
 static REF_STATUS ref_ntop_project_to_surface(REF_NTOP_CONTEXT ntop_context,
                                                REF_DBL *xyz_in,
                                                REF_DBL *xyz_out) {
-#ifdef HAVE_NTOP
-  /* TODO: When you have nTop Core SDK, use closest_point query:
-   *
-   * ntop_core_vec3 query_pt;
-   * query_pt.x = xyz_in[0] * ntop_context->unit_scale;
-   * query_pt.y = xyz_in[1] * ntop_context->unit_scale;
-   * query_pt.z = xyz_in[2] * ntop_context->unit_scale;
-   *
-   * // Use callback to get closest point
-   * ntop_core_query_closest_point_array(...);
-   *
-   * xyz_out[0] = result.x / ntop_context->unit_scale;
-   * xyz_out[1] = result.y / ntop_context->unit_scale;
-   * xyz_out[2] = result.z / ntop_context->unit_scale;
-   */
-#endif
-
-  /* Stub: Simple gradient descent to project to sphere */
   REF_INT iter;
   REF_DBL xyz[3];
 
@@ -239,26 +264,41 @@ static REF_STATUS ref_ntop_project_to_surface(REF_NTOP_CONTEXT ntop_context,
   xyz[1] = xyz_in[1];
   xyz[2] = xyz_in[2];
 
-  /* Newton-Raphson iteration */
+  /* Newton-Raphson iteration using gradient descent */
   for (iter = 0; iter < 20; iter++) {
-    REF_DBL f = ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1], xyz[2]);
-    REF_DBL eps = 1.0e-8;
+    REF_DBL f, grad[3], grad_mag_sq;
 
-    /* Compute gradient */
-    REF_DBL fx =
-        ref_ntop_query_field_impl(ntop_context, xyz[0] + eps, xyz[1], xyz[2]);
-    REF_DBL fy =
-        ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1] + eps, xyz[2]);
-    REF_DBL fz =
-        ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1], xyz[2] + eps);
+#ifdef HAVE_NTOP
+    {
+      ntop_core_vec3 pt;
+      ntop_core_derivative deriv;
+      pt.x = xyz[0] * ntop_context->unit_scale;
+      pt.y = xyz[1] * ntop_context->unit_scale;
+      pt.z = xyz[2] * ntop_context->unit_scale;
+      ntop_core_query_derivative(ntop_context->implicit_handle, pt, &deriv);
+      f = deriv.distance;
+      grad[0] = deriv.dx;
+      grad[1] = deriv.dy;
+      grad[2] = deriv.dz;
+    }
+#else
+    /* Finite difference for stub sphere */
+    {
+      REF_DBL eps = 1.0e-8;
+      f = ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1], xyz[2]);
+      REF_DBL fx =
+          ref_ntop_query_field_impl(ntop_context, xyz[0] + eps, xyz[1], xyz[2]);
+      REF_DBL fy =
+          ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1] + eps, xyz[2]);
+      REF_DBL fz =
+          ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1], xyz[2] + eps);
+      grad[0] = (fx - f) / eps;
+      grad[1] = (fy - f) / eps;
+      grad[2] = (fz - f) / eps;
+    }
+#endif
 
-    REF_DBL grad[3];
-    grad[0] = (fx - f) / eps;
-    grad[1] = (fy - f) / eps;
-    grad[2] = (fz - f) / eps;
-
-    REF_DBL grad_mag_sq =
-        grad[0] * grad[0] + grad[1] * grad[1] + grad[2] * grad[2];
+    grad_mag_sq = grad[0] * grad[0] + grad[1] * grad[1] + grad[2] * grad[2];
 
     if (grad_mag_sq < 1.0e-20) break;
 
