@@ -41,6 +41,7 @@
 #include "ref_matrix.h"
 #include "ref_meshlink.h"
 #include "ref_metric.h"
+#include "ref_ntop.h"
 #include "ref_mpi.h"
 #include "ref_part.h"
 #include "ref_phys.h"
@@ -104,6 +105,7 @@ static void adapt_help(const char *name) {
   printf("  -x  output_mesh.extension\n");
   printf("  --metric <metric.solb> (geometry feature metric when missing)\n");
   printf("  --egads <geometry.egads> (ignored with EGADSlite)\n");
+  printf("  --implicit <geometry.implicit> (nTop Core implicit surface)\n");
   printf("  --implied-complexity [complexity] imply metric from input mesh\n");
   printf("      and scale to complexity\n");
   printf("  --spalding [y+=1] [complexity]\n");
@@ -210,6 +212,7 @@ static void loop_help(const char *name) {
   printf("\n");
   printf("  options:\n");
   printf("   --egads <geometry.egads> (ignored with EGADSlite)\n");
+  printf("   --implicit <geometry.implicit> (nTop Core implicit surface)\n");
   printf("   --norm-power <power> multiscale metric norm power.\n");
   printf("       Default power is 2 (1 for goal-based metrics)\n");
   printf("   --gradation <gradation> (default -1)\n");
@@ -640,6 +643,7 @@ static REF_STATUS adapt(REF_MPI ref_mpi_orig, int argc, char *argv[]) {
   char *in_mesh = NULL;
   char *in_metric = NULL;
   char *in_egads = NULL;
+  char *in_implicit = NULL;
   REF_GRID ref_grid = NULL;
   REF_MPI ref_mpi = ref_mpi_orig;
   REF_BOOL distance_metric = REF_FALSE;
@@ -682,28 +686,37 @@ static REF_STATUS adapt(REF_MPI ref_mpi_orig, int argc, char *argv[]) {
     RSS(ref_meshlink_open(ref_grid, argv[pos + 1]), "meshlink init");
     RSS(ref_meshlink_infer_orientation(ref_grid), "meshlink orient");
   } else {
-    RXS(ref_args_char(argc, argv, "--egads", "-g", &in_egads), REF_NOT_FOUND,
-        "egads arg search");
-    if (NULL != in_egads) {
-      if (ref_mpi_once(ref_mpi)) printf("load egads from %s\n", in_egads);
-      RSS(ref_egads_load(ref_grid_geom(ref_grid), in_egads), "load egads");
-      if (ref_mpi_once(ref_mpi) && ref_geom_effective(ref_grid_geom(ref_grid)))
-        printf("EBody Effective Body loaded\n");
-      ref_mpi_stopwatch_stop(ref_mpi, "load egads");
+    RXS(ref_args_char(argc, argv, "--implicit", NULL, &in_implicit),
+        REF_NOT_FOUND, "implicit arg search");
+    if (NULL != in_implicit) {
+      if (ref_mpi_once(ref_mpi))
+        printf("load nTop implicit from %s\n", in_implicit);
+      RSS(ref_ntop_load(ref_grid_geom(ref_grid), in_implicit), "load implicit");
+      ref_mpi_stopwatch_stop(ref_mpi, "load implicit");
     } else {
-      if (0 < ref_geom_cad_data_size(ref_grid_geom(ref_grid))) {
-        if (ref_mpi_once(ref_mpi))
-          printf("load egadslite from .meshb byte stream\n");
-        RSS(ref_egads_load(ref_grid_geom(ref_grid), NULL), "load egads");
-        if (ref_mpi_once(ref_mpi) &&
-            ref_geom_effective(ref_grid_geom(ref_grid)))
+      RXS(ref_args_char(argc, argv, "--egads", "-g", &in_egads), REF_NOT_FOUND,
+          "egads arg search");
+      if (NULL != in_egads) {
+        if (ref_mpi_once(ref_mpi)) printf("load egads from %s\n", in_egads);
+        RSS(ref_egads_load(ref_grid_geom(ref_grid), in_egads), "load egads");
+        if (ref_mpi_once(ref_mpi) && ref_geom_effective(ref_grid_geom(ref_grid)))
           printf("EBody Effective Body loaded\n");
         ref_mpi_stopwatch_stop(ref_mpi, "load egads");
       } else {
-        if (ref_mpi_once(ref_mpi)) {
-          printf("warning: no geometry loaded, assuming planar faces.\n");
+        if (0 < ref_geom_cad_data_size(ref_grid_geom(ref_grid))) {
+          if (ref_mpi_once(ref_mpi))
+            printf("load egadslite from .meshb byte stream\n");
+          RSS(ref_egads_load(ref_grid_geom(ref_grid), NULL), "load egads");
+          if (ref_mpi_once(ref_mpi) &&
+              ref_geom_effective(ref_grid_geom(ref_grid)))
+            printf("EBody Effective Body loaded\n");
+          ref_mpi_stopwatch_stop(ref_mpi, "load egads");
+        } else {
+          if (ref_mpi_once(ref_mpi)) {
+            printf("warning: no geometry loaded, assuming planar faces.\n");
+          }
+          curvature_metric = REF_FALSE;
         }
-        curvature_metric = REF_FALSE;
       }
     }
   }
@@ -3044,6 +3057,7 @@ static REF_STATUS loop(REF_MPI ref_mpi_orig, int argc, char *argv[]) {
   char *in_project = NULL;
   char *out_project = NULL;
   char *in_egads = NULL;
+  char *in_implicit = NULL;
   char filename[1024];
   REF_GRID ref_grid = NULL;
   REF_MPI ref_mpi = ref_mpi_orig;
@@ -3294,26 +3308,35 @@ static REF_STATUS loop(REF_MPI ref_mpi_orig, int argc, char *argv[]) {
     RSS(ref_meshlink_open(ref_grid, argv[pos + 1]), "meshlink init");
     RSS(ref_meshlink_infer_orientation(ref_grid), "meshlink orient");
   } else {
-    RXS(ref_args_char(argc, argv, "--egads", "-g", &in_egads), REF_NOT_FOUND,
-        "egads arg search");
-    if (NULL != in_egads) {
-      if (ref_mpi_once(ref_mpi)) printf("load egads from %s\n", in_egads);
-      RSS(ref_egads_load(ref_grid_geom(ref_grid), in_egads), "load egads");
-      if (ref_mpi_once(ref_mpi) && ref_geom_effective(ref_grid_geom(ref_grid)))
-        printf("EBody Effective Body loaded\n");
-      ref_mpi_stopwatch_stop(ref_mpi, "load egads");
+    RXS(ref_args_char(argc, argv, "--implicit", NULL, &in_implicit),
+        REF_NOT_FOUND, "implicit arg search");
+    if (NULL != in_implicit) {
+      if (ref_mpi_once(ref_mpi))
+        printf("load nTop implicit from %s\n", in_implicit);
+      RSS(ref_ntop_load(ref_grid_geom(ref_grid), in_implicit), "load implicit");
+      ref_mpi_stopwatch_stop(ref_mpi, "load implicit");
     } else {
-      if (0 < ref_geom_cad_data_size(ref_grid_geom(ref_grid))) {
-        if (ref_mpi_once(ref_mpi))
-          printf("load egadslite from .meshb byte stream\n");
-        RSS(ref_egads_load(ref_grid_geom(ref_grid), NULL), "load egads");
-        if (ref_mpi_once(ref_mpi) &&
-            ref_geom_effective(ref_grid_geom(ref_grid)))
+      RXS(ref_args_char(argc, argv, "--egads", "-g", &in_egads), REF_NOT_FOUND,
+          "egads arg search");
+      if (NULL != in_egads) {
+        if (ref_mpi_once(ref_mpi)) printf("load egads from %s\n", in_egads);
+        RSS(ref_egads_load(ref_grid_geom(ref_grid), in_egads), "load egads");
+        if (ref_mpi_once(ref_mpi) && ref_geom_effective(ref_grid_geom(ref_grid)))
           printf("EBody Effective Body loaded\n");
-        ref_mpi_stopwatch_stop(ref_mpi, "load egadslite cad data");
+        ref_mpi_stopwatch_stop(ref_mpi, "load egads");
       } else {
-        if (ref_mpi_once(ref_mpi))
-          printf("warning: no geometry loaded, assuming planar faces.\n");
+        if (0 < ref_geom_cad_data_size(ref_grid_geom(ref_grid))) {
+          if (ref_mpi_once(ref_mpi))
+            printf("load egadslite from .meshb byte stream\n");
+          RSS(ref_egads_load(ref_grid_geom(ref_grid), NULL), "load egads");
+          if (ref_mpi_once(ref_mpi) &&
+              ref_geom_effective(ref_grid_geom(ref_grid)))
+            printf("EBody Effective Body loaded\n");
+          ref_mpi_stopwatch_stop(ref_mpi, "load egadslite cad data");
+        } else {
+          if (ref_mpi_once(ref_mpi))
+            printf("warning: no geometry loaded, assuming planar faces.\n");
+        }
       }
     }
   }
