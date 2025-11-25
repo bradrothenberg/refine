@@ -23,7 +23,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _MSC_VER
 #include <unistd.h>
+#endif
 
 #include "ref_cell.h"
 #include "ref_dict.h"
@@ -38,6 +40,7 @@
 #include "ref_meshlink.h"
 #include "ref_mpi.h"
 #include "ref_node.h"
+#include "ref_ntop.h"
 #include "ref_sort.h"
 
 REF_FCN REF_STATUS ref_geom_initialize(REF_GEOM ref_geom) {
@@ -1554,6 +1557,18 @@ REF_FCN REF_STATUS ref_geom_constrain(REF_GRID ref_grid, REF_INT node) {
 
   if (ref_geom_meshlinked(ref_geom)) {
     RSS(ref_meshlink_constrain(ref_grid, node), "meshlink");
+    return REF_SUCCESS;
+  }
+
+  if (ref_geom_ntop_loaded(ref_geom)) {
+    /* Use nTop backend - constrain all geom for this node */
+    each_ref_adj_node_item_with_ref(ref_adj, node, item, geom) {
+      RSS(ref_ntop_eval(ref_geom, geom, xyz, NULL), "ntop eval");
+      node = ref_geom_node(ref_geom, geom);
+      ref_node_xyz(ref_node, 0, node) = xyz[0];
+      ref_node_xyz(ref_node, 1, node) = xyz[1];
+      ref_node_xyz(ref_node, 2, node) = xyz[2];
+    }
     return REF_SUCCESS;
   }
 

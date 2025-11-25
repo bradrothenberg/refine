@@ -32,6 +32,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* Windows MSVC compatibility */
+#ifdef _MSC_VER
+#include <sys/types.h>
+#include <windows.h>
+#pragma warning(disable : 4996) /* Disable deprecation warnings */
+/* Map POSIX functions to Windows equivalents */
+#define sleep(seconds) (Sleep((seconds) * 1000), 0)
+#define ftello(stream) _ftelli64(stream)
+#define fseeko(stream, offset, origin) _fseeki64(stream, offset, origin)
+#endif
+
 BEGIN_C_DECLORATION
 
 typedef int REF_BOOL;

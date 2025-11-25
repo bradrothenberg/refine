@@ -39,6 +39,7 @@ set(REF_TWO_HEADERS
         ref_meshlink.h
         ref_metric.h
         ref_migrate.h
+        ref_ntop.h
         ref_mpi.h
         ref_node.h
         ref_oct.h
@@ -92,6 +93,7 @@ set(REF_CORE_SRC
         ref_meshlink.c
         ref_metric.c
         ref_node.c
+        ref_ntop.c
         ref_oct.c
         ref_part.c
         ref_phys.c
@@ -158,9 +160,11 @@ if (Zoltan_FOUND)
     list(APPEND EXTRA_DEFINITIONS HAVE_ZOLTAN)
 endif ()
 
-find_library(MATH_LIBRARY m REQUIRED)
-if (MATH_LIBRARY)
-    list(APPEND THIRD_PARTY_LIBRARIES ${MATH_LIBRARY})
+if (NOT MSVC)
+    find_library(MATH_LIBRARY m REQUIRED)
+    if (MATH_LIBRARY)
+        list(APPEND THIRD_PARTY_LIBRARIES ${MATH_LIBRARY})
+    endif ()
 endif ()
 
 set(REF_MPI_SRC

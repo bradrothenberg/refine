@@ -35,6 +35,7 @@
 #include "ref_matrix.h"
 #include "ref_meshlink.h"
 #include "ref_node.h"
+#include "ref_ntop.h"
 #include "ref_phys.h"
 #include "ref_sort.h"
 
@@ -1386,6 +1387,9 @@ REF_FCN REF_STATUS ref_metric_from_curvature(REF_DBL *metric,
       } else if (ref_geom_meshlinked(ref_geom)) {
         RSS(ref_meshlink_face_curvature(ref_grid, geom, &kr, r, &ks, s),
             "curve");
+      } else if (ref_geom_ntop_loaded(ref_geom)) {
+        RSS(ref_ntop_face_curvature(ref_geom, geom, &kr, r, &ks, s),
+            "ntop curve");
       } else {
         continue;
       }
@@ -1407,7 +1411,8 @@ REF_FCN REF_STATUS ref_metric_from_curvature(REF_DBL *metric,
         RSS(ref_geom_reliability(ref_geom, geom, &slop), "edge tol");
       } else if (ref_geom_meshlinked(ref_geom)) {
         RSS(ref_meshlink_gap(ref_grid, node, &slop), "edge tol");
-        slop *= ref_geom_gap_protection(ref_geom);
+      } else if (ref_geom_ntop_loaded(ref_geom)) {
+        RSS(ref_ntop_gap(ref_geom, node, &slop), "ntop gap");
       } else {
         slop = 1.0e-5 * hmax;
       }
@@ -1450,6 +1455,8 @@ REF_FCN REF_STATUS ref_metric_from_curvature(REF_DBL *metric,
         RSS(ref_egads_edge_curvature(ref_geom, geom, &kr, r), "curve");
       } else if (ref_geom_meshlinked(ref_geom)) {
         RSS(ref_meshlink_edge_curvature(ref_grid, geom, &kr, r), "curve");
+      } else if (ref_geom_ntop_loaded(ref_geom)) {
+        RSS(ref_ntop_edge_curvature(ref_geom, geom, &kr, r), "ntop edge curve");
       } else {
         continue;
       }

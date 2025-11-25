@@ -244,18 +244,17 @@ REF_FCN REF_STATUS ref_mpi_stop(void) {
 
 REF_FCN REF_STATUS ref_mpi_int_size_type(REF_SIZE size, REF_TYPE *type) {
   *type = REF_UNKNOWN_TYPE;
-  switch (size) {
-    case sizeof(REF_INT):
-      *type = REF_INT_TYPE;
-      break;
-    case sizeof(REF_LONG):
-      *type = REF_LONG_TYPE;
-      break;
-    default:
-      RSB(REF_IMPLEMENT, "data size", {
-        printf("size %lu not %lu %lu\n", (unsigned long)size,
-               (unsigned long)sizeof(REF_INT), (unsigned long)sizeof(REF_LONG));
-      });
+  /* On Windows MSVC, sizeof(REF_INT) == sizeof(REF_LONG) (both 4 bytes),
+     so use if-else instead of switch to avoid duplicate case values */
+  if (size == sizeof(REF_INT)) {
+    *type = REF_INT_TYPE;
+  } else if (size == sizeof(REF_LONG)) {
+    *type = REF_LONG_TYPE;
+  } else {
+    RSB(REF_IMPLEMENT, "data size", {
+      printf("size %lu not %lu %lu\n", (unsigned long)size,
+             (unsigned long)sizeof(REF_INT), (unsigned long)sizeof(REF_LONG));
+    });
   }
   return REF_SUCCESS;
 }
