@@ -37,3 +37,14 @@ Makefile.in
 
 /misc/*.pdf
 
+# nTop Core SDK (proprietary - do not commit)
+/nTop/
+*.dll
+*.lib
+ntop_core.h
+
+# Build artifacts
+/build/
+
+# Claude Code settings
+.claude/
