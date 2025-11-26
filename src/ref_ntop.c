@@ -398,18 +398,80 @@ REF_FCN REF_STATUS ref_ntop_eval_at(REF_GEOM ref_geom, REF_INT type,
   }
 }
 
+/* Forward declaration for use in ref_ntop_eval */
+static REF_STATUS ref_ntop_compute_normal(REF_NTOP_CONTEXT ntop_context,
+                                          REF_DBL *xyz, REF_DBL *normal);
+
 REF_FCN REF_STATUS ref_ntop_eval(REF_GEOM ref_geom, REF_INT geom, REF_DBL *xyz,
                                  REF_DBL *dxyz_dtuv) {
-  REF_INT type, id;
-  REF_DBL params[2];
+  REF_NTOP_CONTEXT ntop_context;
+  REF_INT type;
+  REF_DBL xyz_proj[3];
+
+  RNS(ref_geom, "null geom");
+  RNS(ref_geom->context, "null context");
+
+  ntop_context = (REF_NTOP_CONTEXT)(ref_geom->context);
+
+  if (NULL == ntop_context->implicit_handle) {
+    return REF_FAILURE;
+  }
 
   type = ref_geom_type(ref_geom, geom);
-  id = ref_geom_id(ref_geom, geom);
 
-  params[0] = ref_geom_param(ref_geom, 0, geom);
-  params[1] = ref_geom_param(ref_geom, 1, geom);
+  if (REF_GEOM_FACE == type) {
+    /* For nTop implicit, use the incoming xyz as seed and project directly
+     * to the surface. No 2D parameterization needed - just march along
+     * the gradient from the current position to the surface. */
+    RSS(ref_ntop_project_to_surface(ntop_context, xyz, xyz_proj), "proj");
 
-  return ref_ntop_eval_at(ref_geom, type, id, params, xyz, dxyz_dtuv);
+    xyz[0] = xyz_proj[0];
+    xyz[1] = xyz_proj[1];
+    xyz[2] = xyz_proj[2];
+
+    /* Compute derivatives if requested */
+    if (NULL != dxyz_dtuv) {
+      /* For implicit surfaces, derivatives are based on the surface normal.
+       * Construct a local tangent basis from the gradient. */
+      REF_DBL normal[3];
+      REF_DBL tangent1[3], tangent2[3], t1_mag;
+
+      RSS(ref_ntop_compute_normal(ntop_context, xyz, normal), "normal");
+
+      if (fabs(normal[2]) < 0.9) {
+        tangent1[0] = -normal[1];
+        tangent1[1] = normal[0];
+        tangent1[2] = 0.0;
+      } else {
+        tangent1[0] = 0.0;
+        tangent1[1] = -normal[2];
+        tangent1[2] = normal[1];
+      }
+
+      t1_mag = sqrt(tangent1[0] * tangent1[0] + tangent1[1] * tangent1[1] +
+                    tangent1[2] * tangent1[2]);
+      if (t1_mag > 1.0e-14) {
+        tangent1[0] /= t1_mag;
+        tangent1[1] /= t1_mag;
+        tangent1[2] /= t1_mag;
+      }
+
+      tangent2[0] = normal[1] * tangent1[2] - normal[2] * tangent1[1];
+      tangent2[1] = normal[2] * tangent1[0] - normal[0] * tangent1[2];
+      tangent2[2] = normal[0] * tangent1[1] - normal[1] * tangent1[0];
+
+      dxyz_dtuv[0] = tangent1[0];
+      dxyz_dtuv[1] = tangent1[1];
+      dxyz_dtuv[2] = tangent1[2];
+      dxyz_dtuv[3] = tangent2[0];
+      dxyz_dtuv[4] = tangent2[1];
+      dxyz_dtuv[5] = tangent2[2];
+    }
+
+    return REF_SUCCESS;
+  }
+
+  return REF_IMPLEMENT;
 }
 
 /* ========================================================================

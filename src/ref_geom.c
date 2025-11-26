@@ -1561,7 +1561,11 @@ REF_FCN REF_STATUS ref_geom_constrain(REF_GRID ref_grid, REF_INT node) {
   }
 
   if (ref_geom_ntop_loaded(ref_geom)) {
-    /* Use nTop backend - constrain all geom for this node */
+    /* Use nTop backend - constrain all geom for this node.
+     * For nTop, xyz is used as seed for projection, so initialize from node. */
+    xyz[0] = ref_node_xyz(ref_node, 0, node);
+    xyz[1] = ref_node_xyz(ref_node, 1, node);
+    xyz[2] = ref_node_xyz(ref_node, 2, node);
     each_ref_adj_node_item_with_ref(ref_adj, node, item, geom) {
       RSS(ref_ntop_eval(ref_geom, geom, xyz, NULL), "ntop eval");
       node = ref_geom_node(ref_geom, geom);

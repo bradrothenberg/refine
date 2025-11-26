@@ -58,7 +58,8 @@ REF_FCN REF_STATUS ref_args_char(REF_INT n, char **args,
     *value = args[pos + 1];
     return REF_SUCCESS;
   }
-  if (REF_SUCCESS == ref_args_find(n, args, short_target, &pos)) {
+  if (NULL != short_target &&
+      REF_SUCCESS == ref_args_find(n, args, short_target, &pos)) {
     RAB(pos < n - 1, "missing value",
         { printf("for option %s", short_target); });
     *value = args[pos + 1];
