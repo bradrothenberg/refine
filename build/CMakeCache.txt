@@ -333,7 +333,7 @@ MPI_mpi_LIBRARY:FILEPATH=MPI_mpi_LIBRARY-NOTFOUND
 MPI_msmpi_LIBRARY:FILEPATH=MPI_msmpi_LIBRARY-NOTFOUND
 
 //Path to nTop Core SDK directory (containing lib/)
-NTOP_CORE_DIR:PATH=C:/Users/bradrothenberg/OneDrive - nTop/BUILDS/extension_block_prototype/nTopCore
+NTOP_CORE_DIR:PATH=C:/cplusplus/ntop/nTopCore
 
 //The directory containing a CMake configuration file for OpenCASCADE.
 OpenCASCADE_DIR:PATH=OpenCASCADE_DIR-NOTFOUND
@@ -372,7 +372,7 @@ refine_IS_TOP_LEVEL:STATIC=ON
 refine_SOURCE_DIR:STATIC=C:/cplusplus/ntop/refine
 
 //Dependencies for the target
-refine_core_LIB_DEPENDS:STATIC=general;C:/Users/bradrothenberg/OneDrive - nTop/BUILDS/extension_block_prototype/nTopCore/lib/ntop_core.lib;
+refine_core_LIB_DEPENDS:STATIC=general;C:/cplusplus/ntop/nTopCore/lib/ntop_core.lib;
 
 
 ########################

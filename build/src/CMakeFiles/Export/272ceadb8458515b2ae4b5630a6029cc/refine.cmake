@@ -79,7 +79,7 @@ add_library(refine::refine_core STATIC IMPORTED)
 
 set_target_properties(refine::refine_core PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include/refine"
-  INTERFACE_LINK_LIBRARIES "C:/Users/bradrothenberg/OneDrive - nTop/BUILDS/extension_block_prototype/nTopCore/lib/ntop_core.lib"
+  INTERFACE_LINK_LIBRARIES "C:/cplusplus/ntop/nTopCore/lib/ntop_core.lib"
 )
 
 # Load information for each installed configuration.
