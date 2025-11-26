@@ -120,29 +120,25 @@ RSS(ref_ntop_close(ref_geom), "close ntop");
 
 ## How It Works
 
-### Implicit Surface Parameterization
+### Direct XYZ-Based Geometry Evaluation
 
-Since implicit surfaces `f(x,y,z) = 0` don't have natural (u,v) parameters, refine uses a **projection-based parameterization**:
+Unlike EGADS surfaces, implicit surfaces `f(x,y,z) = 0` don't have natural (u,v) parameters.
+The nTop integration **bypasses UV parameterization entirely** and works directly with 3D node positions:
 
-1. **Forward evaluation** `(u,v) → xyz`:
-   - Use (u,v) as seed coordinates in XY plane
-   - Project seed point onto implicit surface using gradient descent
+1. **Curvature computation**:
+   - Uses the node's XYZ coordinates directly (no UV conversion)
+   - Computes surface normal at the node position via gradient: `n = ∇f / ||∇f||`
+   - Estimates principal curvatures using finite-difference normal variation in orthogonal tangent directions:
+     ```
+     k ≈ |Δn| / |Δs|
+     ```
+   - Constructs orthogonal tangent basis perpendicular to the surface normal
+   - Samples normals at offset points along each tangent direction
 
-2. **Inverse evaluation** `xyz → (u,v)`:
-   - Project xyz onto surface
-   - Extract (u,v) from projected XY coordinates
-
-### Curvature Estimation
-
-Principal curvatures are computed using **finite-difference normal variation**:
-
-```
-k ≈ |Δn| / |Δs|
-```
-
-Where:
-- `n = ∇f / ||∇f||` is the surface normal
-- `Δn` is the change in normal over distance `Δs`
+2. **Node projection**:
+   - Projects nodes onto the implicit surface using gradient descent
+   - Maintains surface fidelity during mesh smoothing operations
+   - No UV parameters are stored or used in the process
 
 The nTop Core API provides `ntop_core_query_derivative()` for efficient gradient computation.
 

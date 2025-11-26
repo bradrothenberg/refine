@@ -682,90 +682,18 @@ REF_FCN REF_STATUS ref_ntop_face_curvature_at(REF_GEOM ref_geom,
   return REF_SUCCESS;
 }
 
-REF_FCN REF_STATUS ref_ntop_face_curvature(REF_GRID ref_grid, REF_INT geom,
+REF_FCN REF_STATUS ref_ntop_face_curvature(REF_GEOM ref_geom, REF_INT geom,
                                            REF_DBL *kr, REF_DBL *r,
                                            REF_DBL *ks, REF_DBL *s) {
-  REF_GEOM ref_geom = ref_grid_geom(ref_grid);
-  REF_NODE ref_node = ref_grid_node(ref_grid);
-  REF_NTOP_CONTEXT ntop_context;
-  REF_INT node;
-  REF_DBL xyz[3], normal[3];
-  REF_DBL eps = 1.0e-6;
-  REF_DBL tangent1[3], tangent2[3];
-  REF_DBL xyz1[3], xyz2[3], n1[3], n2[3];
-  REF_DBL dn1, dn2, t1_mag;
+  REF_INT faceid, degen;
+  REF_DBL uv[2];
 
-  RNS(ref_geom, "null geom");
-  RNS(ref_geom->context, "null context");
+  faceid = ref_geom_id(ref_geom, geom);
+  degen = ref_geom_degen(ref_geom, geom);
+  uv[0] = ref_geom_param(ref_geom, 0, geom);
+  uv[1] = ref_geom_param(ref_geom, 1, geom);
 
-  ntop_context = (REF_NTOP_CONTEXT)(ref_geom->context);
-
-  /* Get the node index and its XYZ coordinates directly */
-  node = ref_geom_node(ref_geom, geom);
-  xyz[0] = ref_node_xyz(ref_node, 0, node);
-  xyz[1] = ref_node_xyz(ref_node, 1, node);
-  xyz[2] = ref_node_xyz(ref_node, 2, node);
-
-  /* Compute normal at the node position */
-  RSS(ref_ntop_compute_normal(ntop_context, xyz, normal), "normal");
-
-  /* Construct tangent basis (perpendicular to normal) */
-  if (fabs(normal[2]) < 0.9) {
-    tangent1[0] = -normal[1];
-    tangent1[1] = normal[0];
-    tangent1[2] = 0.0;
-  } else {
-    tangent1[0] = 0.0;
-    tangent1[1] = -normal[2];
-    tangent1[2] = normal[1];
-  }
-
-  /* Normalize tangent1 */
-  t1_mag = sqrt(tangent1[0] * tangent1[0] + tangent1[1] * tangent1[1] +
-                tangent1[2] * tangent1[2]);
-  tangent1[0] /= t1_mag;
-  tangent1[1] /= t1_mag;
-  tangent1[2] /= t1_mag;
-
-  /* tangent2 = normal × tangent1 */
-  tangent2[0] = normal[1] * tangent1[2] - normal[2] * tangent1[1];
-  tangent2[1] = normal[2] * tangent1[0] - normal[0] * tangent1[2];
-  tangent2[2] = normal[0] * tangent1[1] - normal[1] * tangent1[0];
-
-  /* Sample normals at offset points */
-  xyz1[0] = xyz[0] + eps * tangent1[0];
-  xyz1[1] = xyz[1] + eps * tangent1[1];
-  xyz1[2] = xyz[2] + eps * tangent1[2];
-  RSS(ref_ntop_project_to_surface(ntop_context, xyz1, xyz1), "proj1");
-  RSS(ref_ntop_compute_normal(ntop_context, xyz1, n1), "n1");
-
-  xyz2[0] = xyz[0] + eps * tangent2[0];
-  xyz2[1] = xyz[1] + eps * tangent2[1];
-  xyz2[2] = xyz[2] + eps * tangent2[2];
-  RSS(ref_ntop_project_to_surface(ntop_context, xyz2, xyz2), "proj2");
-  RSS(ref_ntop_compute_normal(ntop_context, xyz2, n2), "n2");
-
-  /* Curvature ≈ Δnormal / Δposition */
-  dn1 = sqrt((n1[0] - normal[0]) * (n1[0] - normal[0]) +
-             (n1[1] - normal[1]) * (n1[1] - normal[1]) +
-             (n1[2] - normal[2]) * (n1[2] - normal[2]));
-
-  dn2 = sqrt((n2[0] - normal[0]) * (n2[0] - normal[0]) +
-             (n2[1] - normal[1]) * (n2[1] - normal[1]) +
-             (n2[2] - normal[2]) * (n2[2] - normal[2]));
-
-  *kr = dn1 / eps;
-  *ks = dn2 / eps;
-
-  r[0] = tangent1[0];
-  r[1] = tangent1[1];
-  r[2] = tangent1[2];
-
-  s[0] = tangent2[0];
-  s[1] = tangent2[1];
-  s[2] = tangent2[2];
-
-  return REF_SUCCESS;
+  return ref_ntop_face_curvature_at(ref_geom, faceid, degen, uv, kr, r, ks, s);
 }
 
 REF_FCN REF_STATUS ref_ntop_edge_curvature(REF_GEOM ref_geom, REF_INT geom,

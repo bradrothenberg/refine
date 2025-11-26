@@ -1390,7 +1390,7 @@ REF_FCN REF_STATUS ref_metric_from_curvature(REF_DBL *metric,
         RSS(ref_meshlink_face_curvature(ref_grid, geom, &kr, r, &ks, s),
             "curve");
       } else if (ref_geom_ntop_loaded(ref_geom)) {
-        RSS(ref_ntop_face_curvature(ref_geom, geom, &kr, r, &ks, s),
+        RSS(ref_ntop_face_curvature(ref_grid, geom, &kr, r, &ks, s),
             "ntop curve");
       } else {
         continue;

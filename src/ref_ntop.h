@@ -69,7 +69,7 @@ REF_FCN REF_STATUS ref_ntop_face_curvature_at(REF_GEOM ref_geom,
                                                REF_DBL *s);
 
 /* Compute curvature at stored face geom */
-REF_FCN REF_STATUS ref_ntop_face_curvature(REF_GEOM ref_geom, REF_INT geom,
+REF_FCN REF_STATUS ref_ntop_face_curvature(REF_GRID ref_grid, REF_INT geom,
                                            REF_DBL *kr, REF_DBL *r,
                                            REF_DBL *ks, REF_DBL *s);
 
