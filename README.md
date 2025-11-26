@@ -57,6 +57,23 @@ for additional build instructions.
  make install
 ```
 
+## CMake with nTop Core Support:
+
+`refine` can also be built with [nTop Core SDK](https://www.ntop.com/software/capabilities/implicit-interop/)
+support to use implicit surfaces (`.implicit`) files for geometry evaluation:
+
+```
+ mkdir -p build
+ cd build
+ cmake .. -DCMAKE_INSTALL_PREFIX=`pwd` \
+   -DNTOP_CORE_DIR="/path/to/nTopCore"
+ make
+ make install
+```
+
+When `NTOP_CORE_DIR` is set and the library is found, `HAVE_NTOP` is automatically defined.
+See [NTOP_REFINE_USAGE.md](NTOP_REFINE_USAGE.md) for detailed usage instructions.
+
 ## Usage
 
 The installed `bin` directory will include the `ref` executable.
@@ -107,6 +124,24 @@ or
 mpiexec ... refmpi adapt input.meshb -x output.meshb [-m metric.solb]
 ```
 where a surface curvature metric is used if the `-m` argument is not present.
+
+### Mesh Adaptation with nTop Implicit Surfaces
+
+When built with nTop Core support, mesh adaptation can use implicit surfaces:
+
+```
+ref adapt input.meshb --implicit geometry.implicit -x output.meshb
+```
+
+**Important**: You must provide both a volumetric mesh (containing tetrahedra) and an
+implicit surface file. Use `--implied-complexity` to control mesh density:
+
+```
+ref adapt input.meshb --implicit geometry.implicit --implied-complexity 20000 -x output.meshb
+```
+
+See [NTOP_REFINE_USAGE.md](NTOP_REFINE_USAGE.md) for complete workflow examples and
+converter utilities for BDF and STL formats.
 
 ## Multiscale Metric for Control of Interpolation Error in Lp-norm
 

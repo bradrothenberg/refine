@@ -271,6 +271,129 @@ Functions used from nTop Core:
 | `ntop_core_query_field()` | Signed distance at point |
 | `ntop_core_query_derivative()` | Gradient + distance at point |
 
+## Using the Command Line Interface
+
+### Basic Usage with Implicit Surfaces
+
+The `ref` executable can adapt meshes using implicit surfaces with the `--implicit` flag:
+
+```bash
+ref adapt input.meshb --implicit geometry.implicit -x output.meshb
+```
+
+**IMPORTANT**: You must provide **both**:
+1. A **volumetric mesh** (`.meshb`, `.ugrid`, `.b8.ugrid`, etc.) containing tetrahedra
+2. An **implicit surface file** (`.implicit`) for geometry evaluation
+
+The volumetric mesh provides:
+- Initial tetrahedral elements to adapt
+- Surface triangles marking the geometry boundary
+- Node positions as starting points
+
+The implicit surface provides:
+- Exact geometry for node projection during smoothing
+- Curvature information for metric computation
+- Surface normals for anisotropic refinement
+
+### Controlling Mesh Density
+
+Without metric control, the curvature-based adaptation can create overly refined (or degenerate) meshes. Use `--implied-complexity` to control target mesh density:
+
+```bash
+ref adapt input.meshb --implicit geometry.implicit \
+    --implied-complexity 20000 \
+    -x output.meshb
+```
+
+**Recommended complexity values**:
+- Coarse mesh: 5,000 - 10,000
+- Medium mesh: 20,000 - 50,000
+- Fine mesh: 100,000 - 500,000
+
+The `--implied-complexity` flag:
+- Derives a metric from the input mesh structure
+- Scales it to achieve the target complexity value
+- Prevents excessive refinement in high-curvature regions
+- Maintains better element quality throughout adaptation
+
+### Complete Workflow Example
+
+Here's a complete workflow using the SphereCube example:
+
+```bash
+# 1. Convert surface mesh (STL) to meshb format
+util/stl2mesh.exe SphereCube.stl SphereCube_surf.meshb
+
+# 2. Convert volumetric mesh (BDF) to meshb format
+util/bdf2mesh.exe SphereCube.bdf SphereCube_vol.meshb
+
+# 3. Combine surface and volume into one mesh (if needed)
+ref translate SphereCube_vol.meshb SphereCube_combined.meshb
+
+# 4. Adapt with implicit surface and controlled complexity
+ref adapt SphereCube_combined.meshb \
+    --implicit SphereCube.implicit \
+    --implied-complexity 20000 \
+    -x SphereCube_adapted.meshb
+
+# 5. Convert back to BDF format (optional)
+util/mesh2bdf.exe SphereCube_adapted.meshb SphereCube_adapted.bdf
+```
+
+### Available Mesh Formats
+
+The refine framework supports multiple mesh formats:
+
+**Input/Output formats**:
+- `.meshb` - Gamma Mesh Format (binary, recommended)
+- `.mesh` - Gamma Mesh Format (ASCII)
+- `.ugrid` - NASA UGRID format (ASCII)
+- `.b8.ugrid` - NASA UGRID format (binary)
+- `.bdf` - NASTRAN Bulk Data Format (via converters)
+- `.stl` - STereoLithography (surface only, via converters)
+
+**Converter utilities** (in `util/`):
+- `bdf2mesh` - Convert NASTRAN BDF to meshb
+- `mesh2bdf` - Convert meshb to NASTRAN BDF
+- `stl2mesh` - Convert STL to meshb (surface mesh)
+- `mesh2stl` - Convert meshb to STL (surface mesh)
+
+### Adaptation Options
+
+Common flags for the `adapt` command:
+
+| Flag | Description |
+|------|-------------|
+| `--implicit <file>` | Use implicit surface for geometry |
+| `--implied-complexity <N>` | Target mesh complexity (recommended) |
+| `-x <output>` | Output mesh file |
+| `--surf-pass <N>` | Number of surface adaptation passes (default: 10) |
+| `--vol-pass <N>` | Number of volume adaptation passes (default: 10) |
+
+### Checking Adaptation Quality
+
+Monitor the adaptation output for these indicators:
+
+**Good adaptation**:
+```
+pass 5 of 10: id ratio 0.7071 quality 0.0448 complexity   19524
+```
+- Quality ratio > 0.7 (closer to 1.0 is better)
+- Complexity near target value
+- Smooth convergence across passes
+
+**Poor adaptation** (warning signs):
+```
+pass 22 of 25: id ratio 0.0010 quality 0.9846 complexity 5127391281
+WARNING: termination recommended
+```
+- Quality ratio < 0.01 indicates degenerate elements
+- Complexity orders of magnitude from target
+- "Termination recommended" warnings early in adaptation
+- Extremely small minimum volumes (< 1e-15)
+
+If you see poor quality, use `--implied-complexity` to control the metric.
+
 ## References
 
 - [NASA refine documentation](https://github.com/nasa/refine)
