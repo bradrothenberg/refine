@@ -39,6 +39,9 @@ REF_FCN REF_STATUS ref_ntop_close(REF_GEOM ref_geom);
 
 /* Load implicit surface definition from file */
 REF_FCN REF_STATUS ref_ntop_load(REF_GEOM ref_geom, const char *filename);
+/* Load edge curves from STEP file */
+REF_FCN REF_STATUS ref_ntop_load_step_edges(REF_GEOM ref_geom, const char *filename);
+
 
 /* Save implicit surface definition to file */
 REF_FCN REF_STATUS ref_ntop_save(REF_GEOM ref_geom, const char *filename);

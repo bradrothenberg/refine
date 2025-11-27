@@ -81,24 +81,12 @@ NTOP_CORE_API void ntop_core_query_derivative(ntop_core_handle handle,
  * DATA STRUCTURES
  * ======================================================================== */
 
-/* Edge curve structure for STEP file edges */
-typedef struct REF_NTOP_EDGE_STRUCT {
-  REF_INT degree;              /* B-spline degree */
-  REF_INT ncontrol;            /* Number of control points */
-  REF_DBL **control_points;    /* Control points [ncontrol][3] */
-  REF_INT nknots;              /* Number of knot values */
-  REF_DBL *knots;              /* Knot vector */
-  REF_INT *multiplicities;     /* Knot multiplicities */
-  REF_DBL param_range[2];      /* Parameter range [tmin, tmax] */
-} REF_NTOP_EDGE_STRUCT;
-
-typedef REF_NTOP_EDGE_STRUCT *REF_NTOP_EDGE;
-
 /* nTop Core context stored in ref_geom->context */
 typedef struct REF_NTOP_CONTEXT_STRUCT {
-  void *implicit_handle;       /* nTop Core handle for face geometry */
-  REF_NTOP_EDGE *edges;        /* Array of edge curve definitions */
-  REF_INT nedge;               /* Number of edge curves */
+  void *implicit_handle;       /* nTop Core handle */
+  void *edge_model;            /* EGADS model for edge curves */
+  void **edges;                /* Array of EGADS edge objects */
+  REF_INT nedge;               /* Number of edges in EGADS model */
   REF_DBL bbox_min[3];         /* Cached bounding box min */
   REF_DBL bbox_max[3];         /* Cached bounding box max */
   REF_DBL unit_scale;          /* Convert problem units → meters */
@@ -119,7 +107,7 @@ REF_FCN REF_STATUS ref_ntop_open(REF_GEOM ref_geom) {
   ref_malloc(ntop_context, 1, REF_NTOP_CONTEXT_STRUCT);
 
   ntop_context->implicit_handle = NULL;
-  
+  ntop_context->edge_model = NULL;
   ntop_context->edges = NULL;
   ntop_context->nedge = 0;
   ntop_context->unit_scale = 1.0;     /* Assume problem is in meters */
@@ -155,28 +143,6 @@ REF_FCN REF_STATUS ref_ntop_close(REF_GEOM ref_geom) {
   }
 #endif
 
-
-  /* Release edge curves */
-  if (NULL != ntop_context->edges) {
-    REF_INT i, j;
-    for (i = 0; i < ntop_context->nedge; i++) {
-      if (NULL != ntop_context->edges[i]) {
-        /* Free control points */
-        if (NULL != ntop_context->edges[i]->control_points) {
-          for (j = 0; j < ntop_context->edges[i]->ncontrol; j++) {
-            ref_free(ntop_context->edges[i]->control_points[j]);
-          }
-          ref_free(ntop_context->edges[i]->control_points);
-        }
-        /* Free knots and multiplicities */
-        ref_free(ntop_context->edges[i]->knots);
-        ref_free(ntop_context->edges[i]->multiplicities);
-        /* Free edge structure */
-        ref_free(ntop_context->edges[i]);
-      }
-    }
-    ref_free(ntop_context->edges);
-  }
   ref_free(ntop_context);
   ref_geom->context = NULL;
 
@@ -806,6 +772,20 @@ REF_FCN REF_STATUS ref_ntop_face_curvature(REF_GRID ref_grid, REF_INT geom,
   s[2] = tangent2[2];
 
   return REF_SUCCESS;
+}
+
+REF_FCN REF_STATUS ref_ntop_edge_curvature(REF_GEOM ref_geom, REF_INT geom,
+                                           REF_DBL *k, REF_DBL *normal) {
+  /* Not implemented yet */
+  SUPRESS_UNUSED_COMPILER_WARNING(ref_geom);
+  SUPRESS_UNUSED_COMPILER_WARNING(geom);
+
+  *k = 0.01; /* Small curvature */
+  normal[0] = 0.0;
+  normal[1] = 0.0;
+  normal[2] = 1.0;
+
+  return REF_IMPLEMENT;
 }
 
 REF_FCN REF_STATUS ref_ntop_feature_size(REF_GRID ref_grid, REF_INT node,

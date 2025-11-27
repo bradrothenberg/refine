@@ -106,6 +106,7 @@ static void adapt_help(const char *name) {
   printf("  --metric <metric.solb> (geometry feature metric when missing)\n");
   printf("  --egads <geometry.egads> (ignored with EGADSlite)\n");
   printf("  --implicit <geometry.implicit> (nTop Core implicit surface)\n");
+  --edge-curves <geometry.step> (STEP file with edge curve definitions)
   printf("  --implied-complexity [complexity] imply metric from input mesh\n");
   printf("      and scale to complexity\n");
   printf("  --spalding [y+=1] [complexity]\n");
@@ -213,6 +214,7 @@ static void loop_help(const char *name) {
   printf("  options:\n");
   printf("   --egads <geometry.egads> (ignored with EGADSlite)\n");
   printf("   --implicit <geometry.implicit> (nTop Core implicit surface)\n");
+   --edge-curves <geometry.step> (STEP file with edge curve definitions)
   printf("   --norm-power <power> multiscale metric norm power.\n");
   printf("       Default power is 2 (1 for goal-based metrics)\n");
   printf("   --gradation <gradation> (default -1)\n");
@@ -696,6 +698,19 @@ static REF_STATUS adapt(REF_MPI ref_mpi_orig, int argc, char *argv[]) {
       /* Associate all surface nodes with the implicit for curvature metrics */
       RSS(ref_ntop_constrain_all(ref_grid), "constrain to implicit");
       ref_mpi_stopwatch_stop(ref_mpi, "constrain nodes");
+      /* Load edge curves if provided */
+      {
+        const char *edge_curves_file = NULL;
+        RXS(ref_args_char(argc, argv, "--edge-curves", NULL, &edge_curves_file),
+            REF_NOT_FOUND, "edge curves arg search");
+        if (NULL != edge_curves_file) {
+          if (ref_mpi_once(ref_mpi))
+            printf("load edge curves from %s\n", edge_curves_file);
+          RSS(ref_ntop_load_step_edges(ref_grid_geom(ref_grid), edge_curves_file),
+              "load edge curves");
+          ref_mpi_stopwatch_stop(ref_mpi, "load edge curves");
+        }
+      }
       {
         REF_INT ntet;
         /* Set surface mode if no tets */
@@ -3326,6 +3341,19 @@ static REF_STATUS loop(REF_MPI ref_mpi_orig, int argc, char *argv[]) {
       RSS(ref_ntop_load(ref_grid_geom(ref_grid), in_implicit), "load implicit");
       ref_mpi_stopwatch_stop(ref_mpi, "load implicit");
       /* Associate all surface nodes with the implicit for curvature metrics */
+      /* Load edge curves if provided */
+      {
+        const char *edge_curves_file = NULL;
+        RXS(ref_args_char(argc, argv, "--edge-curves", NULL, &edge_curves_file),
+            REF_NOT_FOUND, "edge curves arg search");
+        if (NULL != edge_curves_file) {
+          if (ref_mpi_once(ref_mpi))
+            printf("load edge curves from %s\n", edge_curves_file);
+          RSS(ref_ntop_load_step_edges(ref_grid_geom(ref_grid), edge_curves_file),
+              "load edge curves");
+          ref_mpi_stopwatch_stop(ref_mpi, "load edge curves");
+        }
+      }
       RSS(ref_ntop_constrain_all(ref_grid), "constrain to implicit");
       ref_mpi_stopwatch_stop(ref_mpi, "constrain nodes");
       {
