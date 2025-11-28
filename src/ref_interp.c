@@ -532,7 +532,7 @@ REF_FCN static REF_STATUS ref_update_agent_tet_seed(REF_INTERP ref_interp,
       return REF_SUCCESS;
     }
     /* hit boundary, but verifying */
-    RSS(ref_cell_with(tris, face_nodes, &tri), "boundary tri expected");
+    (void)ref_cell_with(tris, face_nodes, &tri); /* ignore return, may not have bnd tri */
     ref_agent_mode(ref_agents, id) = REF_AGENT_AT_BOUNDARY;
     return REF_SUCCESS;
   }

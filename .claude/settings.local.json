@@ -57,7 +57,15 @@
       "Bash(\"c:/cplusplus/ntop/refine/util/bdf2mesh.exe\" \"c:/cplusplus/ntop/refine/nTop/data/SphereCubeLR.bdf\" \"c:/cplusplus/ntop/refine/nTop/data/SphereCubeLR.meshb\")",
       "Bash(\"c:/cplusplus/ntop/refine/util/stl2mesh.exe\" \"c:/cplusplus/ntop/refine/nTop/data/SphereCubeLR.stl\" \"c:/cplusplus/ntop/refine/nTop/data/SphereCubeLR_surf.meshb\")",
       "Bash(\"c:/cplusplus/ntop/refine/util/mesh2bdf.exe\" \"c:/cplusplus/ntop/refine/nTop/data/SphereCubeLR_adapted.meshb\" \"c:/cplusplus/ntop/refine/nTop/data/SphereCubeLR_adapted.bdf\")",
-      "Bash(\"c:/cplusplus/ntop/refine/util/mesh2bdf.exe\":*)"
+      "Bash(\"c:/cplusplus/ntop/refine/util/mesh2bdf.exe\":*)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" checkout src/ref_subcommand.c)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" diff src/ref_ntop.c)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" log --oneline -10)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" diff 2c288db1f..HEAD --stat)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" diff HEAD --stat)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" stash)",
+      "Bash(md5sum:*)",
+      "Bash(certutil -hashfile:*)"
     ],
     "deny": [],
     "ask": []

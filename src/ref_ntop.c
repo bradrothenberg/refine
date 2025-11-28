@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <string.h>
 #include "ref_adj.h"
 #include "ref_cell.h"
 #include "ref_malloc.h"
@@ -965,5 +966,368 @@ REF_FCN REF_STATUS ref_ntop_constrain_all(REF_GRID ref_grid) {
 
   printf("Constrained %d nodes to implicit face\n", n_constrained);
 
+  return REF_SUCCESS;
+}
+
+/* ========================================================================
+ * STEP FILE PARSING FOR EDGE CURVES
+ * ======================================================================== */
+
+REF_FCN REF_STATUS ref_ntop_load_step_edges(REF_GEOM ref_geom,
+                                             const char *filename) {
+  REF_NTOP_CONTEXT ntop_context;
+  FILE *fp;
+  char line[4096];
+  REF_INT i, j;
+
+  /* Temporary storage for parsing */
+  REF_INT max_points = 1000;
+  REF_INT npoints = 0;
+  REF_INT *point_ids = NULL;
+  REF_DBL *point_coords = NULL;
+
+  REF_INT max_curves = 100;
+  REF_INT ncurves = 0;
+  REF_INT *curve_degrees = NULL;
+  REF_INT *curve_ncontrol = NULL;
+  REF_INT **curve_control_refs = NULL;
+  REF_INT *curve_nknots = NULL;
+  REF_INT **curve_mults = NULL;
+  REF_DBL **curve_knots = NULL;
+
+  RNS(ref_geom, "null geom");
+  RNS(ref_geom->context, "null context");
+
+  ntop_context = (REF_NTOP_CONTEXT)(ref_geom->context);
+
+  /* Open file */
+  fp = fopen(filename, "r");
+  if (NULL == fp) {
+    printf("ERROR: Cannot open STEP file: %s\n", filename);
+    return REF_FAILURE;
+  }
+
+  /* Allocate temporary storage */
+  ref_malloc(point_ids, max_points, REF_INT);
+  ref_malloc(point_coords, max_points * 3, REF_DBL);
+  ref_malloc(curve_degrees, max_curves, REF_INT);
+  ref_malloc(curve_ncontrol, max_curves, REF_INT);
+  ref_malloc(curve_control_refs, max_curves, REF_INT *);
+  ref_malloc(curve_nknots, max_curves, REF_INT);
+  ref_malloc(curve_mults, max_curves, REF_INT *);
+  ref_malloc(curve_knots, max_curves, REF_DBL *);
+
+  for (i = 0; i < max_curves; i++) {
+    curve_control_refs[i] = NULL;
+    curve_mults[i] = NULL;
+    curve_knots[i] = NULL;
+  }
+
+  /* Parse STEP file line by line */
+  while (fgets(line, sizeof(line), fp)) {
+    char *ptr = line;
+    REF_INT entity_id;
+
+    /* Skip whitespace */
+    while (*ptr == ' ' || *ptr == '\t') ptr++;
+
+    /* Look for entity definitions starting with # */
+    if (*ptr != '#') continue;
+    ptr++;
+
+    /* Get entity ID */
+    entity_id = atoi(ptr);
+    while (*ptr >= '0' && *ptr <= '9') ptr++;
+
+    /* Skip to = */
+    while (*ptr && *ptr != '=') ptr++;
+    if (*ptr != '=') continue;
+    ptr++;
+
+    /* Skip whitespace */
+    while (*ptr == ' ' || *ptr == '\t') ptr++;
+
+    /* Parse CARTESIAN_POINT */
+    if (strncmp(ptr, "CARTESIAN_POINT", 15) == 0) {
+      REF_DBL x, y, z;
+      char *coords;
+
+      /* Find (( */
+      coords = strstr(ptr, ",(");
+      if (NULL == coords) continue;
+      coords += 2;
+
+      /* Parse coordinates */
+      if (sscanf(coords, "%lf,%lf,%lf", &x, &y, &z) == 3) {
+        if (npoints < max_points) {
+          point_ids[npoints] = entity_id;
+          point_coords[npoints * 3 + 0] = x;
+          point_coords[npoints * 3 + 1] = y;
+          point_coords[npoints * 3 + 2] = z;
+          npoints++;
+        }
+      }
+    }
+    /* Parse B_SPLINE_CURVE_WITH_KNOTS */
+    else if (strncmp(ptr, "B_SPLINE_CURVE_WITH_KNOTS", 25) == 0) {
+      char *p;
+      REF_INT degree;
+      REF_INT ctrl_refs[100];
+      REF_INT nctrl = 0;
+      REF_INT mults[100];
+      REF_DBL knots[100];
+      REF_INT nmult = 0, nknot = 0;
+
+      /* Format: B_SPLINE_CURVE_WITH_KNOTS('',degree,(ctrl_pts),...,(mults),(knots),...) */
+
+      /* Find first comma after '(' */
+      p = strchr(ptr, '(');
+      if (NULL == p) continue;
+
+      /* Skip name string */
+      p = strchr(p, ',');
+      if (NULL == p) continue;
+      p++;
+
+      /* Parse degree */
+      degree = atoi(p);
+
+      /* Find control point list */
+      p = strchr(p, '(');
+      if (NULL == p) continue;
+      p++;
+
+      /* Parse control point references */
+      while (*p && *p != ')') {
+        if (*p == '#') {
+          p++;
+          ctrl_refs[nctrl++] = atoi(p);
+          while (*p >= '0' && *p <= '9') p++;
+        } else {
+          p++;
+        }
+      }
+
+      /* Skip to multiplicities - find pattern ",(number,number)" after several fields */
+      /* The format has: (ctrl_pts),.UNSPECIFIED.,.F.,.F.,(mults),(knots),... */
+      /* Skip past control points closing paren */
+      if (*p == ')') p++;
+
+      /* Find the multiplicities list - look for ",(number" pattern */
+      for (i = 0; i < 4 && *p; i++) {
+        while (*p && *p != ',') p++;
+        if (*p == ',') p++;
+      }
+
+      /* Now should be at multiplicities */
+      if (*p == '(') {
+        p++;
+        while (*p && *p != ')') {
+          if (*p >= '0' && *p <= '9') {
+            mults[nmult++] = atoi(p);
+            while (*p >= '0' && *p <= '9') p++;
+          } else {
+            p++;
+          }
+        }
+        if (*p == ')') p++;
+      }
+
+      /* Skip comma */
+      while (*p && *p != '(') p++;
+
+      /* Parse knots */
+      if (*p == '(') {
+        p++;
+        while (*p && *p != ')') {
+          if ((*p >= '0' && *p <= '9') || *p == '-' || *p == '.') {
+            knots[nknot++] = atof(p);
+            while (*p && ((*p >= '0' && *p <= '9') || *p == '.' || *p == '-' ||
+                          *p == 'e' || *p == 'E' || *p == '+'))
+              p++;
+          } else {
+            p++;
+          }
+        }
+      }
+
+      /* Store curve data */
+      if (ncurves < max_curves && nctrl > 0) {
+        curve_degrees[ncurves] = degree;
+        curve_ncontrol[ncurves] = nctrl;
+        ref_malloc(curve_control_refs[ncurves], nctrl, REF_INT);
+        for (i = 0; i < nctrl; i++) {
+          curve_control_refs[ncurves][i] = ctrl_refs[i];
+        }
+        curve_nknots[ncurves] = nknot;
+        ref_malloc(curve_mults[ncurves], nmult, REF_INT);
+        for (i = 0; i < nmult; i++) {
+          curve_mults[ncurves][i] = mults[i];
+        }
+        ref_malloc(curve_knots[ncurves], nknot, REF_DBL);
+        for (i = 0; i < nknot; i++) {
+          curve_knots[ncurves][i] = knots[i];
+        }
+        ncurves++;
+      }
+    }
+  }
+
+  fclose(fp);
+
+  printf("Parsed %d CARTESIAN_POINTs and %d B_SPLINE_CURVE_WITH_KNOTS\n",
+         npoints, ncurves);
+
+  /* Build edge curves from parsed data */
+  if (ncurves > 0) {
+    /* Allocate edge array */
+    ref_malloc(ntop_context->edges, ncurves, REF_NTOP_EDGE);
+    ntop_context->nedge = ncurves;
+
+    for (i = 0; i < ncurves; i++) {
+      REF_NTOP_EDGE edge;
+      ref_malloc(edge, 1, REF_NTOP_EDGE_STRUCT);
+
+      edge->degree = curve_degrees[i];
+      edge->ncontrol = curve_ncontrol[i];
+      edge->nknots = curve_nknots[i];
+
+      /* Allocate and fill control points */
+      ref_malloc(edge->control_points, edge->ncontrol, REF_DBL *);
+      for (j = 0; j < edge->ncontrol; j++) {
+        REF_INT ref_id = curve_control_refs[i][j];
+        REF_INT k;
+        ref_malloc(edge->control_points[j], 3, REF_DBL);
+
+        /* Find point coordinates by ID */
+        for (k = 0; k < npoints; k++) {
+          if (point_ids[k] == ref_id) {
+            edge->control_points[j][0] = point_coords[k * 3 + 0];
+            edge->control_points[j][1] = point_coords[k * 3 + 1];
+            edge->control_points[j][2] = point_coords[k * 3 + 2];
+            break;
+          }
+        }
+      }
+
+      /* Copy knots and multiplicities */
+      ref_malloc(edge->knots, edge->nknots, REF_DBL);
+      for (j = 0; j < edge->nknots; j++) {
+        edge->knots[j] = curve_knots[i][j];
+      }
+
+      ref_malloc(edge->multiplicities, edge->nknots, REF_INT);
+      for (j = 0; j < edge->nknots; j++) {
+        edge->multiplicities[j] = curve_mults[i][j];
+      }
+
+      /* Set parameter range from knots */
+      edge->param_range[0] = edge->knots[0];
+      edge->param_range[1] = edge->knots[edge->nknots - 1];
+
+      ntop_context->edges[i] = edge;
+
+      printf("  Edge %d: degree=%d, ncontrol=%d, range=[%g,%g]\n", i,
+             edge->degree, edge->ncontrol, edge->param_range[0],
+             edge->param_range[1]);
+    }
+  }
+
+  /* Clean up temporary storage */
+  for (i = 0; i < ncurves; i++) {
+    ref_free(curve_control_refs[i]);
+    ref_free(curve_mults[i]);
+    ref_free(curve_knots[i]);
+  }
+  ref_free(curve_knots);
+  ref_free(curve_mults);
+  ref_free(curve_nknots);
+  ref_free(curve_control_refs);
+  ref_free(curve_ncontrol);
+  ref_free(curve_degrees);
+  ref_free(point_coords);
+  ref_free(point_ids);
+
+  return REF_SUCCESS;
+}
+
+/* ========================================================================
+ * EDGE CURVATURE COMPUTATION
+ * ======================================================================== */
+
+REF_FCN REF_STATUS ref_ntop_edge_curvature(REF_GEOM ref_geom, REF_INT geom,
+                                           REF_DBL *k, REF_DBL *normal) {
+  REF_NTOP_CONTEXT ntop_context;
+  REF_INT edge_id, type;
+  REF_NTOP_EDGE edge;
+
+  /* Default: zero curvature (straight line) */
+  *k = 0.0;
+  normal[0] = 0.0;
+  normal[1] = 0.0;
+  normal[2] = 1.0;
+
+  RNS(ref_geom, "null geom");
+  if (NULL == ref_geom->context) return REF_SUCCESS;
+
+  ntop_context = (REF_NTOP_CONTEXT)(ref_geom->context);
+
+  /* Get edge ID from geom */
+  type = ref_geom_type(ref_geom, geom);
+  if (REF_GEOM_EDGE != type) return REF_SUCCESS;
+
+  edge_id = ref_geom_id(ref_geom, geom) - 1; /* 0-indexed */
+
+  /* Check if we have edge curves */
+  if (NULL == ntop_context->edges || edge_id < 0 ||
+      edge_id >= ntop_context->nedge) {
+    return REF_SUCCESS;
+  }
+
+  edge = ntop_context->edges[edge_id];
+  if (NULL == edge) return REF_SUCCESS;
+
+  /* For degree 1 (linear) curves, curvature is 0 */
+  if (edge->degree == 1) {
+    /* Compute tangent direction for normal calculation */
+    if (edge->ncontrol >= 2) {
+      REF_DBL dx, dy, dz, len;
+      dx = edge->control_points[1][0] - edge->control_points[0][0];
+      dy = edge->control_points[1][1] - edge->control_points[0][1];
+      dz = edge->control_points[1][2] - edge->control_points[0][2];
+      len = sqrt(dx * dx + dy * dy + dz * dz);
+      if (len > 1e-12) {
+        /* Create a perpendicular vector */
+        if (fabs(dz) > 0.9 * len) {
+          /* Tangent mostly in Z, use X as basis */
+          normal[0] = 1.0;
+          normal[1] = 0.0;
+          normal[2] = -dx / dz;
+        } else if (fabs(dy) > 0.9 * len) {
+          /* Tangent mostly in Y, use X as basis */
+          normal[0] = 1.0;
+          normal[1] = -dx / dy;
+          normal[2] = 0.0;
+        } else {
+          /* Tangent mostly in X, use Y as basis */
+          normal[0] = -dy / dx;
+          normal[1] = 1.0;
+          normal[2] = 0.0;
+        }
+        /* Normalize */
+        len = sqrt(normal[0] * normal[0] + normal[1] * normal[1] +
+                   normal[2] * normal[2]);
+        normal[0] /= len;
+        normal[1] /= len;
+        normal[2] /= len;
+      }
+    }
+    *k = 0.0;
+    return REF_SUCCESS;
+  }
+
+  /* For higher degree curves, would need De Casteljau or derivative evaluation */
+  /* For now, return zero curvature as a safe default */
+  *k = 0.0;
   return REF_SUCCESS;
 }

@@ -106,7 +106,7 @@ static void adapt_help(const char *name) {
   printf("  --metric <metric.solb> (geometry feature metric when missing)\n");
   printf("  --egads <geometry.egads> (ignored with EGADSlite)\n");
   printf("  --implicit <geometry.implicit> (nTop Core implicit surface)\n");
-  --edge-curves <geometry.step> (STEP file with edge curve definitions)
+  printf("  --edge-curves <geometry.step> (STEP file with edge curve definitions)\n");
   printf("  --implied-complexity [complexity] imply metric from input mesh\n");
   printf("      and scale to complexity\n");
   printf("  --spalding [y+=1] [complexity]\n");
@@ -214,7 +214,7 @@ static void loop_help(const char *name) {
   printf("  options:\n");
   printf("   --egads <geometry.egads> (ignored with EGADSlite)\n");
   printf("   --implicit <geometry.implicit> (nTop Core implicit surface)\n");
-   --edge-curves <geometry.step> (STEP file with edge curve definitions)
+  printf("   --edge-curves <geometry.step> (STEP file with edge curve definitions)\n");
   printf("   --norm-power <power> multiscale metric norm power.\n");
   printf("       Default power is 2 (1 for goal-based metrics)\n");
   printf("   --gradation <gradation> (default -1)\n");
