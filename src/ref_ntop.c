@@ -439,9 +439,13 @@ REF_FCN REF_STATUS ref_ntop_eval_at(REF_GEOM ref_geom, REF_INT type,
   }
 }
 
-/* Forward declaration for use in ref_ntop_eval */
+/* Forward declarations for use in ref_ntop_eval */
 static REF_STATUS ref_ntop_compute_normal(REF_NTOP_CONTEXT ntop_context,
                                           REF_DBL *xyz, REF_DBL *normal);
+static REF_STATUS ref_ntop_eval_bspline(REF_NTOP_EDGE edge, REF_DBL t,
+                                        REF_DBL *xyz);
+static REF_STATUS ref_ntop_project_to_edge(REF_NTOP_EDGE edge, REF_DBL *xyz_in,
+                                           REF_DBL *t_out, REF_DBL *xyz_out);
 
 REF_FCN REF_STATUS ref_ntop_eval(REF_GEOM ref_geom, REF_INT geom, REF_DBL *xyz,
                                  REF_DBL *dxyz_dtuv) {
@@ -512,6 +516,65 @@ REF_FCN REF_STATUS ref_ntop_eval(REF_GEOM ref_geom, REF_INT geom, REF_DBL *xyz,
     return REF_SUCCESS;
   }
 
+  if (REF_GEOM_EDGE == type) {
+    /* Project to edge curve */
+    REF_INT edge_id = ref_geom_id(ref_geom, geom) - 1; /* 0-indexed */
+    REF_NTOP_EDGE edge;
+    REF_DBL t_proj;
+
+    /* Check if we have edge curves loaded */
+    if (NULL == ntop_context->edges || edge_id < 0 ||
+        edge_id >= ntop_context->nedge) {
+      return REF_SUCCESS; /* No edge data, skip constraint */
+    }
+
+    edge = ntop_context->edges[edge_id];
+    if (NULL == edge) return REF_SUCCESS; /* Edge not loaded */
+
+    /* Project point onto edge curve */
+    RSS(ref_ntop_project_to_edge(edge, xyz, &t_proj, xyz_proj), "edge proj");
+
+    xyz[0] = xyz_proj[0];
+    xyz[1] = xyz_proj[1];
+    xyz[2] = xyz_proj[2];
+
+    /* Compute tangent derivative if requested */
+    if (NULL != dxyz_dtuv) {
+      REF_DBL h = 1.0e-6;
+      REF_DBL t0 = t_proj;
+      REF_DBL t1 = t_proj + h;
+      REF_DBL xyz0[3], xyz1[3];
+      REF_DBL tangent[3], mag;
+
+      /* Clamp t1 to parameter range */
+      if (t1 > edge->param_range[1]) {
+        t1 = t_proj;
+        t0 = t_proj - h;
+      }
+
+      RSS(ref_ntop_eval_bspline(edge, t0, xyz0), "eval t0");
+      RSS(ref_ntop_eval_bspline(edge, t1, xyz1), "eval t1");
+
+      tangent[0] = (xyz1[0] - xyz0[0]) / h;
+      tangent[1] = (xyz1[1] - xyz0[1]) / h;
+      tangent[2] = (xyz1[2] - xyz0[2]) / h;
+
+      mag = sqrt(tangent[0] * tangent[0] + tangent[1] * tangent[1] +
+                 tangent[2] * tangent[2]);
+      if (mag > 1.0e-12) {
+        tangent[0] /= mag;
+        tangent[1] /= mag;
+        tangent[2] /= mag;
+      }
+
+      dxyz_dtuv[0] = tangent[0];
+      dxyz_dtuv[1] = tangent[1];
+      dxyz_dtuv[2] = tangent[2];
+    }
+
+    return REF_SUCCESS;
+  }
+
   return REF_IMPLEMENT;
 }
 
@@ -553,6 +616,33 @@ REF_FCN REF_STATUS ref_ntop_inverse_eval(REF_GEOM ref_geom, REF_INT type,
       default:
         return REF_INVALID;
     }
+
+    return REF_SUCCESS;
+
+  } else if (REF_GEOM_EDGE == type) {
+    /* Project point to edge curve and return the parameter */
+    REF_INT edge_id = id - 1; /* 0-indexed */
+    REF_NTOP_EDGE edge;
+    REF_DBL t_proj;
+    REF_DBL xyz_proj[3];
+
+    /* Check if we have edge curves loaded */
+    if (NULL == ntop_context->edges || edge_id < 0 ||
+        edge_id >= ntop_context->nedge) {
+      param[0] = 0.0; /* Default parameter */
+      return REF_SUCCESS;
+    }
+
+    edge = ntop_context->edges[edge_id];
+    if (NULL == edge) {
+      param[0] = 0.0;
+      return REF_SUCCESS;
+    }
+
+    /* Project point onto edge curve */
+    RSS(ref_ntop_project_to_edge(edge, xyz, &t_proj, xyz_proj), "edge proj");
+
+    param[0] = t_proj;
 
     return REF_SUCCESS;
 
@@ -1329,5 +1419,259 @@ REF_FCN REF_STATUS ref_ntop_edge_curvature(REF_GEOM ref_geom, REF_INT geom,
   /* For higher degree curves, would need De Casteljau or derivative evaluation */
   /* For now, return zero curvature as a safe default */
   *k = 0.0;
+  return REF_SUCCESS;
+}
+
+/* ========================================================================
+ * B-SPLINE EDGE EVALUATION
+ * ======================================================================== */
+
+/* Find the knot span index for parameter t using binary search */
+static REF_INT ref_ntop_find_knot_span(REF_NTOP_EDGE edge, REF_DBL t) {
+  REF_INT n = edge->ncontrol - 1;
+  REF_INT p = edge->degree;
+  REF_INT low, high, mid;
+  REF_DBL *U;
+  REF_INT i, total_knots;
+
+  /* Build flat knot vector from knots and multiplicities */
+  total_knots = 0;
+  for (i = 0; i < edge->nknots; i++) {
+    total_knots += edge->multiplicities[i];
+  }
+
+  /* For clamped B-splines, the valid range is [U[p], U[n+1]] */
+  /* For our linear edges with knots [0,1] and mult [2,2], span is always 1 */
+  if (edge->degree == 1 && edge->ncontrol == 2) {
+    return 1; /* Single span for linear edge */
+  }
+
+  /* Build flat knot vector */
+  U = (REF_DBL *)malloc(total_knots * sizeof(REF_DBL));
+  if (NULL == U) return 1;
+
+  {
+    REF_INT idx = 0;
+    for (i = 0; i < edge->nknots; i++) {
+      REF_INT j;
+      for (j = 0; j < edge->multiplicities[i]; j++) {
+        U[idx++] = edge->knots[i];
+      }
+    }
+  }
+
+  /* Clamp t to valid range */
+  if (t <= U[p]) {
+    free(U);
+    return p;
+  }
+  if (t >= U[n + 1]) {
+    free(U);
+    return n;
+  }
+
+  /* Binary search */
+  low = p;
+  high = n + 1;
+  mid = (low + high) / 2;
+  while (t < U[mid] || t >= U[mid + 1]) {
+    if (t < U[mid])
+      high = mid;
+    else
+      low = mid;
+    mid = (low + high) / 2;
+  }
+
+  free(U);
+  return mid;
+}
+
+/* Evaluate B-spline basis functions using Cox-de Boor recursion */
+static void ref_ntop_basis_functions(REF_NTOP_EDGE edge, REF_INT span, REF_DBL t,
+                                     REF_DBL *N) {
+  REF_INT p = edge->degree;
+  REF_DBL *left, *right;
+  REF_DBL *U;
+  REF_INT i, j, total_knots, idx;
+  REF_DBL saved, temp;
+
+  /* Build flat knot vector */
+  total_knots = 0;
+  for (i = 0; i < edge->nknots; i++) {
+    total_knots += edge->multiplicities[i];
+  }
+
+  U = (REF_DBL *)malloc(total_knots * sizeof(REF_DBL));
+  left = (REF_DBL *)malloc((p + 1) * sizeof(REF_DBL));
+  right = (REF_DBL *)malloc((p + 1) * sizeof(REF_DBL));
+
+  if (NULL == U || NULL == left || NULL == right) {
+    if (U) free(U);
+    if (left) free(left);
+    if (right) free(right);
+    N[0] = 1.0;
+    for (i = 1; i <= p; i++) N[i] = 0.0;
+    return;
+  }
+
+  idx = 0;
+  for (i = 0; i < edge->nknots; i++) {
+    for (j = 0; j < edge->multiplicities[i]; j++) {
+      U[idx++] = edge->knots[i];
+    }
+  }
+
+  N[0] = 1.0;
+  for (j = 1; j <= p; j++) {
+    left[j] = t - U[span + 1 - j];
+    right[j] = U[span + j] - t;
+    saved = 0.0;
+    for (i = 0; i < j; i++) {
+      temp = N[i] / (right[i + 1] + left[j - i]);
+      N[i] = saved + right[i + 1] * temp;
+      saved = left[j - i] * temp;
+    }
+    N[j] = saved;
+  }
+
+  free(U);
+  free(left);
+  free(right);
+}
+
+/* Evaluate B-spline curve at parameter t */
+static REF_STATUS ref_ntop_eval_bspline(REF_NTOP_EDGE edge, REF_DBL t,
+                                        REF_DBL *xyz) {
+  REF_INT span, i, p;
+  REF_DBL *N;
+
+  if (NULL == edge || NULL == xyz) return REF_NULL;
+
+  p = edge->degree;
+
+  /* Clamp t to parameter range */
+  if (t < edge->param_range[0]) t = edge->param_range[0];
+  if (t > edge->param_range[1]) t = edge->param_range[1];
+
+  /* Special case for linear (degree 1) curves - simple linear interpolation */
+  if (p == 1 && edge->ncontrol == 2) {
+    REF_DBL s = (t - edge->param_range[0]) /
+                (edge->param_range[1] - edge->param_range[0]);
+    xyz[0] = (1.0 - s) * edge->control_points[0][0] +
+             s * edge->control_points[1][0];
+    xyz[1] = (1.0 - s) * edge->control_points[0][1] +
+             s * edge->control_points[1][1];
+    xyz[2] = (1.0 - s) * edge->control_points[0][2] +
+             s * edge->control_points[1][2];
+    return REF_SUCCESS;
+  }
+
+  /* General B-spline evaluation */
+  N = (REF_DBL *)malloc((p + 1) * sizeof(REF_DBL));
+  if (NULL == N) return REF_FAILURE;
+
+  span = ref_ntop_find_knot_span(edge, t);
+  ref_ntop_basis_functions(edge, span, t, N);
+
+  xyz[0] = 0.0;
+  xyz[1] = 0.0;
+  xyz[2] = 0.0;
+
+  for (i = 0; i <= p; i++) {
+    REF_INT cp_idx = span - p + i;
+    if (cp_idx >= 0 && cp_idx < edge->ncontrol) {
+      xyz[0] += N[i] * edge->control_points[cp_idx][0];
+      xyz[1] += N[i] * edge->control_points[cp_idx][1];
+      xyz[2] += N[i] * edge->control_points[cp_idx][2];
+    }
+  }
+
+  free(N);
+  return REF_SUCCESS;
+}
+
+/* Project a point onto a B-spline edge curve, returning the closest parameter t */
+static REF_STATUS ref_ntop_project_to_edge(REF_NTOP_EDGE edge, REF_DBL *xyz_in,
+                                           REF_DBL *t_out, REF_DBL *xyz_out) {
+  REF_INT i;
+  REF_DBL t, best_t, best_dist;
+  REF_DBL xyz_curve[3], dist;
+  REF_INT nsamples = 20; /* Initial sampling resolution */
+
+  if (NULL == edge || NULL == xyz_in || NULL == t_out || NULL == xyz_out)
+    return REF_NULL;
+
+  /* Sample the curve to find approximate closest point */
+  best_t = edge->param_range[0];
+  best_dist = 1.0e30;
+
+  for (i = 0; i <= nsamples; i++) {
+    t = edge->param_range[0] +
+        (edge->param_range[1] - edge->param_range[0]) * (REF_DBL)i /
+            (REF_DBL)nsamples;
+    RSS(ref_ntop_eval_bspline(edge, t, xyz_curve), "eval bspline");
+
+    dist = (xyz_in[0] - xyz_curve[0]) * (xyz_in[0] - xyz_curve[0]) +
+           (xyz_in[1] - xyz_curve[1]) * (xyz_in[1] - xyz_curve[1]) +
+           (xyz_in[2] - xyz_curve[2]) * (xyz_in[2] - xyz_curve[2]);
+
+    if (dist < best_dist) {
+      best_dist = dist;
+      best_t = t;
+    }
+  }
+
+  /* Refine with golden section search in the local region */
+  {
+    REF_DBL t_lo, t_hi;
+    REF_DBL dt = (edge->param_range[1] - edge->param_range[0]) / (REF_DBL)nsamples;
+    REF_INT iter;
+    REF_DBL phi = (1.0 + sqrt(5.0)) / 2.0;
+    REF_DBL resphi = 2.0 - phi;
+
+    t_lo = best_t - dt;
+    t_hi = best_t + dt;
+    if (t_lo < edge->param_range[0]) t_lo = edge->param_range[0];
+    if (t_hi > edge->param_range[1]) t_hi = edge->param_range[1];
+
+    /* Golden section search for minimum distance */
+    for (iter = 0; iter < 20; iter++) {
+      REF_DBL t1, t2, d1, d2;
+      REF_DBL xyz1[3], xyz2[3];
+
+      t1 = t_lo + resphi * (t_hi - t_lo);
+      t2 = t_hi - resphi * (t_hi - t_lo);
+
+      RSS(ref_ntop_eval_bspline(edge, t1, xyz1), "eval t1");
+      RSS(ref_ntop_eval_bspline(edge, t2, xyz2), "eval t2");
+
+      d1 = (xyz_in[0] - xyz1[0]) * (xyz_in[0] - xyz1[0]) +
+           (xyz_in[1] - xyz1[1]) * (xyz_in[1] - xyz1[1]) +
+           (xyz_in[2] - xyz1[2]) * (xyz_in[2] - xyz1[2]);
+      d2 = (xyz_in[0] - xyz2[0]) * (xyz_in[0] - xyz2[0]) +
+           (xyz_in[1] - xyz2[1]) * (xyz_in[1] - xyz2[1]) +
+           (xyz_in[2] - xyz2[2]) * (xyz_in[2] - xyz2[2]);
+
+      if (d1 < d2) {
+        t_hi = t2;
+        if (d1 < best_dist) {
+          best_dist = d1;
+          best_t = t1;
+        }
+      } else {
+        t_lo = t1;
+        if (d2 < best_dist) {
+          best_dist = d2;
+          best_t = t2;
+        }
+      }
+
+      if (t_hi - t_lo < 1.0e-10) break;
+    }
+  }
+
+  *t_out = best_t;
+  RSS(ref_ntop_eval_bspline(edge, best_t, xyz_out), "final eval");
+
   return REF_SUCCESS;
 }

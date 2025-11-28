@@ -65,7 +65,13 @@
       "Bash(git -C \"c:/cplusplus/ntop/refine\" diff HEAD --stat)",
       "Bash(git -C \"c:/cplusplus/ntop/refine\" stash)",
       "Bash(md5sum:*)",
-      "Bash(certutil -hashfile:*)"
+      "Bash(certutil -hashfile:*)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" diff NTOP_REFINE_USAGE.md)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" log --oneline -3)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" remote -v)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" add NTOP_REFINE_USAGE.md)",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" commit -m \"$(cat <<''EOF''\nAdd documentation for mesh boundary triangle requirements\n\nDocument that input meshes must contain both tetrahedra AND boundary\ntriangles when using implicit surfaces. Added:\n- CRITICAL note in Basic Usage section explaining requirements\n- Instructions for using ''ref examine'' to check mesh contents\n- Troubleshooting entry for \"boundary tri expected\" error\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git -C \"c:/cplusplus/ntop/refine\" push bradrothenberg ntop-core-boundaryEdges)"
     ],
     "deny": [],
     "ask": []
