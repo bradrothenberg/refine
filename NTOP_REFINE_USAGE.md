@@ -239,6 +239,19 @@ Possible causes:
 - Tolerance too large (check `ntop_context->tolerance`)
 - Not enough adaptation iterations
 
+### "boundary tri expected" / "did not expect active agents"
+
+The input mesh is missing boundary triangles. The mesh file must contain both:
+- Tetrahedra (volume elements)
+- Triangles (boundary surface elements)
+
+**To diagnose**: Run `ref examine input.meshb` and look for `keyword triangle P1`. If missing, the mesh needs boundary faces.
+
+**To fix**:
+- Regenerate the mesh with boundary triangles included
+- Use a combined mesh that includes surface triangles
+- Check your mesh exporter settings to ensure surface faces are included
+
 ### Curvature is zero everywhere
 
 - Verify the implicit loads correctly (check bounding box output)
@@ -278,12 +291,31 @@ ref adapt input.meshb --implicit geometry.implicit -x output.meshb
 ```
 
 **IMPORTANT**: You must provide **both**:
-1. A **volumetric mesh** (`.meshb`, `.ugrid`, `.b8.ugrid`, etc.) containing tetrahedra
+1. A **volumetric mesh** (`.meshb`, `.ugrid`, `.b8.ugrid`, etc.) containing tetrahedra **AND boundary triangles**
 2. An **implicit surface file** (`.implicit`) for geometry evaluation
+
+**CRITICAL: Mesh File Requirements**
+
+The input mesh file MUST contain both:
+- **Tetrahedra** (volume elements)
+- **Boundary triangles** (surface elements marking the geometry boundary)
+
+If your mesh only contains tetrahedra without boundary triangles, the adaptation will fail with errors like:
+```
+boundary tri expected
+did not expect active agents
+```
+
+You can check if your mesh has triangles using:
+```bash
+ref examine input.meshb
+```
+
+Look for `keyword triangle P1` in the output. If it's missing, you need to regenerate the mesh with boundary faces included, or combine your volume mesh with a surface mesh.
 
 The volumetric mesh provides:
 - Initial tetrahedral elements to adapt
-- Surface triangles marking the geometry boundary
+- **Boundary triangles marking the geometry surface** (required for metric interpolation)
 - Node positions as starting points
 
 The implicit surface provides:
