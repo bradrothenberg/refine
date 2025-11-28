@@ -104,6 +104,9 @@ REF_FCN REF_STATUS ref_ntop_diagonal(REF_GEOM ref_geom, REF_INT geom,
 /* Associate all surface nodes with the implicit face (for curvature metrics) */
 REF_FCN REF_STATUS ref_ntop_constrain_all(REF_GRID ref_grid);
 
+/* Associate boundary edge nodes with edge curves from STEP file */
+REF_FCN REF_STATUS ref_ntop_constrain_edges(REF_GRID ref_grid);
+
 END_C_DECLORATION
 
 #endif /* REF_NTOP_H */

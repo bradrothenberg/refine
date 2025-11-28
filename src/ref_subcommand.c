@@ -709,6 +709,8 @@ static REF_STATUS adapt(REF_MPI ref_mpi_orig, int argc, char *argv[]) {
           RSS(ref_ntop_load_step_edges(ref_grid_geom(ref_grid), edge_curves_file),
               "load edge curves");
           ref_mpi_stopwatch_stop(ref_mpi, "load edge curves");
+          RSS(ref_ntop_constrain_edges(ref_grid), "constrain edges");
+          ref_mpi_stopwatch_stop(ref_mpi, "constrain edges");
         }
       }
       {
@@ -3352,6 +3354,8 @@ static REF_STATUS loop(REF_MPI ref_mpi_orig, int argc, char *argv[]) {
           RSS(ref_ntop_load_step_edges(ref_grid_geom(ref_grid), edge_curves_file),
               "load edge curves");
           ref_mpi_stopwatch_stop(ref_mpi, "load edge curves");
+          RSS(ref_ntop_constrain_edges(ref_grid), "constrain edges");
+          ref_mpi_stopwatch_stop(ref_mpi, "constrain edges");
         }
       }
       RSS(ref_ntop_constrain_all(ref_grid), "constrain to implicit");

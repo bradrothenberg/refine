@@ -431,8 +431,49 @@ REF_FCN REF_STATUS ref_ntop_eval_at(REF_GEOM ref_geom, REF_INT type,
     return REF_SUCCESS;
 
   } else if (REF_GEOM_EDGE == type) {
-    /* For edges, not implemented yet */
-    return REF_IMPLEMENT;
+    /* Evaluate B-spline edge curve at parameter t */
+    REF_INT edge_id = id - 1;  /* 0-indexed */
+    REF_NTOP_EDGE edge;
+    REF_DBL t = params[0];
+
+    if (NULL == ntop_context->edges || edge_id < 0 ||
+        edge_id >= ntop_context->nedge) {
+      return REF_FAILURE;
+    }
+
+    edge = ntop_context->edges[edge_id];
+    if (NULL == edge) return REF_FAILURE;
+
+    /* Evaluate the curve position at t */
+    RSS(ref_ntop_eval_bspline(edge, t, xyz), "eval bspline");
+
+    /* Compute tangent derivative if requested */
+    if (NULL != dxyz_dtuv) {
+      REF_DBL h = 1.0e-6;
+      REF_DBL t0 = t;
+      REF_DBL t1 = t + h;
+      REF_DBL xyz0[3], xyz1[3];
+
+      /* Clamp t1 to parameter range */
+      if (t1 > edge->param_range[1]) {
+        t1 = t;
+        t0 = t - h;
+      }
+      if (t0 < edge->param_range[0]) {
+        t0 = edge->param_range[0];
+        t1 = t0 + h;
+      }
+
+      RSS(ref_ntop_eval_bspline(edge, t0, xyz0), "eval t0");
+      RSS(ref_ntop_eval_bspline(edge, t1, xyz1), "eval t1");
+
+      /* dt/ds derivative (tangent) */
+      dxyz_dtuv[0] = (xyz1[0] - xyz0[0]) / h;
+      dxyz_dtuv[1] = (xyz1[1] - xyz0[1]) / h;
+      dxyz_dtuv[2] = (xyz1[2] - xyz0[2]) / h;
+    }
+
+    return REF_SUCCESS;
 
   } else {
     return REF_INVALID;
@@ -1058,6 +1099,187 @@ REF_FCN REF_STATUS ref_ntop_constrain_all(REF_GRID ref_grid) {
 
   return REF_SUCCESS;
 }
+
+/* Find the closest edge curve to a point and check distance */
+static REF_INT ref_ntop_find_closest_edge(REF_NTOP_CONTEXT ntop_context,
+                                          REF_DBL *xyz, REF_DBL *dist_out) {
+  REF_INT i, best_edge = -1;
+  REF_DBL best_dist = 1.0e30;
+  REF_DBL t_proj, xyz_proj[3], dist;
+
+  if (NULL == ntop_context->edges) return -1;
+
+  for (i = 0; i < ntop_context->nedge; i++) {
+    REF_NTOP_EDGE edge = ntop_context->edges[i];
+    if (NULL == edge) continue;
+
+    if (REF_SUCCESS != ref_ntop_project_to_edge(edge, xyz, &t_proj, xyz_proj))
+      continue;
+
+    dist = sqrt((xyz[0] - xyz_proj[0]) * (xyz[0] - xyz_proj[0]) +
+                (xyz[1] - xyz_proj[1]) * (xyz[1] - xyz_proj[1]) +
+                (xyz[2] - xyz_proj[2]) * (xyz[2] - xyz_proj[2]));
+
+    if (dist < best_dist) {
+      best_dist = dist;
+      best_edge = i;
+    }
+  }
+
+  if (dist_out) *dist_out = best_dist;
+  return best_edge;
+}
+
+/* Constrain mesh nodes near edge curves and create edge cells */
+REF_FCN REF_STATUS ref_ntop_constrain_edges(REF_GRID ref_grid) {
+  REF_NODE ref_node = ref_grid_node(ref_grid);
+  REF_GEOM ref_geom = ref_grid_geom(ref_grid);
+  REF_CELL ref_tri = ref_grid_tri(ref_grid);
+  REF_CELL ref_edg = ref_grid_edg(ref_grid);
+  REF_NTOP_CONTEXT ntop_context;
+  REF_INT node, cell, nodes[REF_CELL_MAX_SIZE_PER];
+  REF_INT n0, n1, side;
+  REF_INT n_edge_nodes = 0, n_edge_cells = 0, n_node_geoms = 0;
+  REF_DBL edge_tol, diag;
+  REF_INT *node_edge_id;     /* edge id for each node, or -1 if not on edge */
+  REF_INT *node_edge_count;  /* number of edge cells adjacent to each node */
+  REF_INT edge_nodes_idx[3][2] = {{0, 1}, {1, 2}, {2, 0}};
+
+  RNS(ref_geom, "null geom");
+  RNS(ref_geom->context, "null context");
+
+  ntop_context = (REF_NTOP_CONTEXT)(ref_geom->context);
+
+  if (NULL == ntop_context->edges || ntop_context->nedge == 0) {
+    printf("No edge curves loaded, skipping edge constraints\n");
+    return REF_SUCCESS;
+  }
+
+  diag = sqrt(
+      pow(ntop_context->bbox_max[0] - ntop_context->bbox_min[0], 2) +
+      pow(ntop_context->bbox_max[1] - ntop_context->bbox_min[1], 2) +
+      pow(ntop_context->bbox_max[2] - ntop_context->bbox_min[2], 2));
+  edge_tol = diag * 0.005;
+  if (edge_tol < 1.0e-6) edge_tol = 1.0e-6;
+  printf("  Edge tolerance: %g (diagonal: %g)\n", edge_tol, diag);
+
+  /* Allocate arrays to track edge nodes */
+  ref_malloc_init(node_edge_id, ref_node_max(ref_node), REF_INT, -1);
+  ref_malloc_init(node_edge_count, ref_node_max(ref_node), REF_INT, 0);
+
+  /* First pass: identify all nodes near edge curves */
+  each_ref_node_valid_node(ref_node, node) {
+    REF_DBL xyz[3], dist;
+    REF_INT edge_id;
+
+    xyz[0] = ref_node_xyz(ref_node, 0, node);
+    xyz[1] = ref_node_xyz(ref_node, 1, node);
+    xyz[2] = ref_node_xyz(ref_node, 2, node);
+
+    edge_id = ref_ntop_find_closest_edge(ntop_context, xyz, &dist);
+    if (edge_id < 0) continue;
+    if (dist > edge_tol) continue;
+
+    node_edge_id[node] = edge_id;
+  }
+
+  /* Second pass: create edge cells for triangle edges where both nodes are on same edge curve */
+  each_ref_cell_valid_cell_with_nodes(ref_tri, cell, nodes) {
+    for (side = 0; side < 3; side++) {
+      n0 = nodes[edge_nodes_idx[side][0]];
+      n1 = nodes[edge_nodes_idx[side][1]];
+
+      /* Both nodes must be on the same edge curve */
+      if (node_edge_id[n0] < 0 || node_edge_id[n1] < 0) continue;
+      if (node_edge_id[n0] != node_edge_id[n1]) continue;
+
+      /* Check if edge cell already exists */
+      {
+        REF_BOOL has_edg;
+        RSS(ref_cell_has_side(ref_edg, n0, n1, &has_edg), "check edg");
+        if (!has_edg) {
+          REF_INT edg_nodes[3];
+          REF_INT new_cell;
+
+          edg_nodes[0] = n0;
+          edg_nodes[1] = n1;
+          edg_nodes[2] = node_edge_id[n0] + 1;  /* edge id (1-based) */
+
+          RSS(ref_cell_add(ref_edg, edg_nodes, &new_cell), "add edge cell");
+          n_edge_cells++;
+
+          /* Count adjacent edge cells for each node */
+          node_edge_count[n0]++;
+          node_edge_count[n1]++;
+        }
+      }
+    }
+  }
+
+  /* Third pass: add geometry for nodes with exactly 2 adjacent edge cells (interior edge nodes)
+     Nodes with only 1 adjacent edge cell are endpoints - mark them as NODE geometry */
+  each_ref_node_valid_node(ref_node, node) {
+    REF_INT edge_id = node_edge_id[node];
+    if (edge_id < 0) continue;
+
+    if (node_edge_count[node] >= 2) {
+      /* Interior edge node - add EDGE geometry */
+      REF_BOOL has_edge;
+      RSS(ref_geom_is_a(ref_geom, node, REF_GEOM_EDGE, &has_edge), "check");
+      if (!has_edge) {
+        REF_NTOP_EDGE edge = ntop_context->edges[edge_id];
+        REF_DBL xyz[3], t_proj, xyz_proj[3];
+        REF_DBL param;
+
+        xyz[0] = ref_node_xyz(ref_node, 0, node);
+        xyz[1] = ref_node_xyz(ref_node, 1, node);
+        xyz[2] = ref_node_xyz(ref_node, 2, node);
+
+        if (REF_SUCCESS == ref_ntop_project_to_edge(edge, xyz, &t_proj, xyz_proj)) {
+          param = t_proj;
+          RSS(ref_geom_add(ref_geom, node, REF_GEOM_EDGE, edge_id + 1, &param),
+              "add edge geom");
+          n_edge_nodes++;
+        }
+      }
+    } else if (node_edge_count[node] == 1) {
+      /* Edge endpoint - add NODE geometry */
+      REF_BOOL has_node;
+      RSS(ref_geom_is_a(ref_geom, node, REF_GEOM_NODE, &has_node), "check");
+      if (!has_node) {
+        REF_DBL param = 0.0;
+        /* Use edge_id + 1 as node id, but need unique id per endpoint */
+        RSS(ref_geom_add(ref_geom, node, REF_GEOM_NODE, edge_id + 1, &param),
+            "add node geom");
+        /* Also need to add the edge geom for the endpoint */
+        {
+          REF_NTOP_EDGE edge = ntop_context->edges[edge_id];
+          REF_DBL xyz[3], t_proj, xyz_proj[3];
+
+          xyz[0] = ref_node_xyz(ref_node, 0, node);
+          xyz[1] = ref_node_xyz(ref_node, 1, node);
+          xyz[2] = ref_node_xyz(ref_node, 2, node);
+
+          if (REF_SUCCESS == ref_ntop_project_to_edge(edge, xyz, &t_proj, xyz_proj)) {
+            param = t_proj;
+            RSS(ref_geom_add(ref_geom, node, REF_GEOM_EDGE, edge_id + 1, &param),
+                "add edge geom for endpoint");
+          }
+        }
+        n_node_geoms++;
+      }
+    }
+  }
+
+  ref_free(node_edge_count);
+  ref_free(node_edge_id);
+
+  printf("  Constrained %d edge nodes + %d endpoints to %d edges, added %d edge cells\n",
+         n_edge_nodes, n_node_geoms, ntop_context->nedge, n_edge_cells);
+
+  return REF_SUCCESS;
+}
+
 
 /* ========================================================================
  * STEP FILE PARSING FOR EDGE CURVES
