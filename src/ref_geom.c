@@ -1563,15 +1563,40 @@ REF_FCN REF_STATUS ref_geom_constrain(REF_GRID ref_grid, REF_INT node) {
   if (ref_geom_ntop_loaded(ref_geom)) {
     /* Use nTop backend - constrain all geom for this node.
      * For nTop, xyz is used as seed for projection, so initialize from node. */
-    xyz[0] = ref_node_xyz(ref_node, 0, node);
-    xyz[1] = ref_node_xyz(ref_node, 1, node);
-    xyz[2] = ref_node_xyz(ref_node, 2, node);
+    REF_DBL xyz_orig[3], min_vol;
+    REF_CELL ref_tet = ref_grid_tet(ref_grid);
+    REF_INT tet_item, tet_cell, tet_nodes[REF_CELL_MAX_SIZE_PER];
+    REF_DBL vol;
+    REF_BOOL degenerate;
+
+    xyz_orig[0] = xyz[0] = ref_node_xyz(ref_node, 0, node);
+    xyz_orig[1] = xyz[1] = ref_node_xyz(ref_node, 1, node);
+    xyz_orig[2] = xyz[2] = ref_node_xyz(ref_node, 2, node);
     each_ref_adj_node_item_with_ref(ref_adj, node, item, geom) {
       RSS(ref_ntop_eval(ref_geom, geom, xyz, NULL), "ntop eval");
       node = ref_geom_node(ref_geom, geom);
       ref_node_xyz(ref_node, 0, node) = xyz[0];
       ref_node_xyz(ref_node, 1, node) = xyz[1];
       ref_node_xyz(ref_node, 2, node) = xyz[2];
+    }
+
+    /* Check if the projection created any degenerate tets */
+    min_vol = ref_node_min_volume(ref_node);
+    degenerate = REF_FALSE;
+    each_ref_cell_having_node(ref_tet, node, tet_item, tet_cell) {
+      RSS(ref_cell_nodes(ref_tet, tet_cell, tet_nodes), "tet nodes");
+      RSS(ref_node_tet_vol(ref_node, tet_nodes, &vol), "tet vol");
+      if (vol < min_vol) {
+        degenerate = REF_TRUE;
+        break;
+      }
+    }
+
+    /* If degenerate, undo the projection */
+    if (degenerate) {
+      ref_node_xyz(ref_node, 0, node) = xyz_orig[0];
+      ref_node_xyz(ref_node, 1, node) = xyz_orig[1];
+      ref_node_xyz(ref_node, 2, node) = xyz_orig[2];
     }
     return REF_SUCCESS;
   }

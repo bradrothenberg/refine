@@ -306,6 +306,11 @@ REF_FCN static REF_STATUS ref_adapt_parameter(REF_GRID ref_grid,
   ref_adapt->smooth_min_quality = target_quality;
 
   ref_node->min_volume = MIN(1.0e-15, 0.01 * min_metric_vol);
+  /* Use more conservative min_volume for nTop implicit surfaces to avoid
+     degenerate tets on flat regions */
+  if (ref_geom_ntop_loaded(ref_grid_geom(ref_grid))) {
+    ref_node->min_volume = MAX(ref_node->min_volume, 1.0e-10);
+  }
 
   /* allow edge growth when interpolating metric continuously */
   ref_adapt->split_ratio_growth = REF_FALSE;

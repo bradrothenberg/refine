@@ -300,10 +300,35 @@ static REF_STATUS ref_ntop_project_to_surface(REF_NTOP_CONTEXT ntop_context,
                                                REF_DBL *xyz_out) {
   REF_INT iter;
   REF_DBL xyz[3];
+  REF_DBL initial_dist;
 
   xyz[0] = xyz_in[0];
   xyz[1] = xyz_in[1];
   xyz[2] = xyz_in[2];
+
+  /* Check if point is already on surface - if so, don't project to avoid
+     numerical drift that can cause nodes to become coplanar */
+#ifdef HAVE_NTOP
+  {
+    ntop_core_vec3 pt;
+    ntop_core_derivative deriv;
+    pt.x = xyz[0] * ntop_context->unit_scale;
+    pt.y = xyz[1] * ntop_context->unit_scale;
+    pt.z = xyz[2] * ntop_context->unit_scale;
+    ntop_core_query_derivative(ntop_context->implicit_handle, pt, &deriv);
+    initial_dist = fabs(deriv.distance);
+  }
+#else
+  initial_dist = fabs(ref_ntop_query_field_impl(ntop_context, xyz[0], xyz[1], xyz[2]));
+#endif
+
+  if (initial_dist < ntop_context->tolerance) {
+    /* Already on surface - return input coordinates unchanged */
+    xyz_out[0] = xyz_in[0];
+    xyz_out[1] = xyz_in[1];
+    xyz_out[2] = xyz_in[2];
+    return REF_SUCCESS;
+  }
 
   /* Newton-Raphson iteration using gradient descent */
   for (iter = 0; iter < 20; iter++) {
@@ -1222,7 +1247,7 @@ REF_FCN REF_STATUS ref_ntop_constrain_edges(REF_GRID ref_grid) {
     REF_INT edge_id = node_edge_id[node];
     if (edge_id < 0) continue;
 
-    if (node_edge_count[node] >= 2) {
+    if (node_edge_count[node] == 2) {
       /* Interior edge node - add EDGE geometry */
       REF_BOOL has_edge;
       RSS(ref_geom_is_a(ref_geom, node, REF_GEOM_EDGE, &has_edge), "check");
@@ -1242,8 +1267,8 @@ REF_FCN REF_STATUS ref_ntop_constrain_edges(REF_GRID ref_grid) {
           n_edge_nodes++;
         }
       }
-    } else if (node_edge_count[node] == 1) {
-      /* Edge endpoint - add NODE geometry */
+    } else if (node_edge_count[node] == 1 || node_edge_count[node] >= 3) {
+      /* Edge endpoint (1 neighbor) or junction (3+ neighbors) - add NODE geometry */
       REF_BOOL has_node;
       RSS(ref_geom_is_a(ref_geom, node, REF_GEOM_NODE, &has_node), "check");
       if (!has_node) {
@@ -1384,21 +1409,27 @@ REF_FCN REF_STATUS ref_ntop_load_step_edges(REF_GEOM ref_geom,
     else if (strncmp(ptr, "B_SPLINE_CURVE_WITH_KNOTS", 25) == 0) {
       char *p;
       REF_INT degree;
-      REF_INT ctrl_refs[100];
+      REF_INT max_ctrl = 2000;  /* Support up to 2000 control points */
+      REF_INT max_knot = 2000;  /* Support up to 2000 knots */
+      REF_INT *ctrl_refs = NULL;
       REF_INT nctrl = 0;
-      REF_INT mults[100];
-      REF_DBL knots[100];
+      REF_INT *mults = NULL;
+      REF_DBL *knots = NULL;
       REF_INT nmult = 0, nknot = 0;
+
+      ref_malloc(ctrl_refs, max_ctrl, REF_INT);
+      ref_malloc(mults, max_knot, REF_INT);
+      ref_malloc(knots, max_knot, REF_DBL);
 
       /* Format: B_SPLINE_CURVE_WITH_KNOTS('',degree,(ctrl_pts),...,(mults),(knots),...) */
 
       /* Find first comma after '(' */
       p = strchr(ptr, '(');
-      if (NULL == p) continue;
+      if (NULL == p) { ref_free(ctrl_refs); ref_free(mults); ref_free(knots); continue; }
 
       /* Skip name string */
       p = strchr(p, ',');
-      if (NULL == p) continue;
+      if (NULL == p) { ref_free(ctrl_refs); ref_free(mults); ref_free(knots); continue; }
       p++;
 
       /* Parse degree */
@@ -1406,14 +1437,14 @@ REF_FCN REF_STATUS ref_ntop_load_step_edges(REF_GEOM ref_geom,
 
       /* Find control point list */
       p = strchr(p, '(');
-      if (NULL == p) continue;
+      if (NULL == p) { ref_free(ctrl_refs); ref_free(mults); ref_free(knots); continue; }
       p++;
 
       /* Parse control point references */
       while (*p && *p != ')') {
         if (*p == '#') {
           p++;
-          ctrl_refs[nctrl++] = atoi(p);
+          if (nctrl < max_ctrl) ctrl_refs[nctrl++] = atoi(p);
           while (*p >= '0' && *p <= '9') p++;
         } else {
           p++;
@@ -1436,7 +1467,7 @@ REF_FCN REF_STATUS ref_ntop_load_step_edges(REF_GEOM ref_geom,
         p++;
         while (*p && *p != ')') {
           if (*p >= '0' && *p <= '9') {
-            mults[nmult++] = atoi(p);
+            if (nmult < max_knot) mults[nmult++] = atoi(p);
             while (*p >= '0' && *p <= '9') p++;
           } else {
             p++;
@@ -1453,7 +1484,7 @@ REF_FCN REF_STATUS ref_ntop_load_step_edges(REF_GEOM ref_geom,
         p++;
         while (*p && *p != ')') {
           if ((*p >= '0' && *p <= '9') || *p == '-' || *p == '.') {
-            knots[nknot++] = atof(p);
+            if (nknot < max_knot) knots[nknot++] = atof(p);
             while (*p && ((*p >= '0' && *p <= '9') || *p == '.' || *p == '-' ||
                           *p == 'e' || *p == 'E' || *p == '+'))
               p++;
@@ -1482,6 +1513,11 @@ REF_FCN REF_STATUS ref_ntop_load_step_edges(REF_GEOM ref_geom,
         }
         ncurves++;
       }
+
+      /* Free temporary arrays */
+      ref_free(ctrl_refs);
+      ref_free(mults);
+      ref_free(knots);
     }
   }
 
